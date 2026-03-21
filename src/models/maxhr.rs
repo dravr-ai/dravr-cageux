@@ -159,7 +159,7 @@ impl FromStr for MaxHrAlgorithm {
             "tanaka" => Ok(Self::Tanaka),
             "nes" => Ok(Self::Nes),
             "gulati" => Ok(Self::Gulati),
-            other => Err(IntelligenceError::invalid_input(
+            other => Err(IntelligenceError::invalid_input_field(
                 "algorithm",
                 format!(
                     "Unknown MaxHR algorithm: '{other}'. Valid options: fox, tanaka, nes, gulati"

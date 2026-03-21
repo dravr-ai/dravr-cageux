@@ -41,7 +41,11 @@
 //! .build();
 //! ```
 
-/// Server configuration loaded from environment variables
+// ============================================================================
+// Foundation modules
+// ============================================================================
+
+/// Server and intelligence configuration
 pub mod config;
 /// Domain constants for sports science calculations
 pub mod constants;
@@ -49,8 +53,79 @@ pub mod constants;
 pub mod error;
 /// Data models (Activity, SportType, TimeSeriesData, etc.)
 pub mod models;
+/// Core intelligence types (`ActivityIntelligence`, `TrendDirection`, Goals, etc.)
+pub mod types;
 
-// Re-export primary types at crate root for convenience
+// ============================================================================
+// Algorithm modules
+// ============================================================================
+
+/// Pluggable algorithms for FTP, LTHR, VO2max, TSS, TRIMP, VDOT, etc.
+pub mod algorithms;
+/// Physiological constants and thresholds
+pub mod physiological_constants;
+
+// ============================================================================
+// Analysis modules
+// ============================================================================
+
+/// Advanced activity analysis with contextual insights
+pub mod activity_analyzer;
+/// Configuration for analysis parameters and thresholds
+pub mod analysis_config;
+/// Core single-activity analyzer
+pub mod analyzer;
+/// Insight generation and categorization
+pub mod insights;
+/// Performance metrics calculation
+pub mod metrics;
+/// Safe metrics extraction with validation
+pub mod metrics_extractor;
+/// Training pattern detection and analysis
+pub mod pattern_detection;
+/// Performance analysis engine (v1)
+pub mod performance_analyzer;
+/// Performance analyzer v2 with improved algorithms
+pub mod performance_analyzer_v2;
+/// Performance prediction and race time estimation
+pub mod performance_prediction;
+/// Statistical analysis and regression
+pub mod statistical_analysis;
+/// Training load calculation and monitoring
+pub mod training_load;
+/// Visitor pattern for single-pass activity time series analysis
+pub mod visitor;
+
+// ============================================================================
+// Domain modules
+// ============================================================================
+
+/// Goal tracking and progress monitoring engine
+pub mod goal_engine;
+/// Nutrition needs calculation and meal planning
+pub mod nutrition_calculator;
+/// Recipe management with training-aware suggestions
+pub mod recipes;
+/// Training recommendation generation
+pub mod recommendation_engine;
+/// Recovery score calculation and recommendations
+pub mod recovery_calculator;
+/// Sleep quality analysis and HRV tracking
+pub mod sleep_analysis;
+
+// ============================================================================
+// Social intelligence modules
+// ============================================================================
+
+/// In-memory cache for friend activity summaries
+pub mod friend_activity_cache;
+/// Adapts shared insights to user's training context
+pub mod insight_adapter;
+
+// ============================================================================
+// Re-exports
+// ============================================================================
+
 pub use config::ServerConfig;
 pub use error::{IntelligenceError, IntelligenceResult};
 pub use models::{

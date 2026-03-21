@@ -85,8 +85,16 @@ pub enum IntelligenceError {
 }
 
 impl IntelligenceError {
-    /// Create an invalid input error.
-    pub fn invalid_input(field: impl Into<String>, reason: impl Into<String>) -> Self {
+    /// Create an invalid input error from a message string.
+    pub fn invalid_input(message: impl Into<String>) -> Self {
+        Self::InvalidInput {
+            field: "input".to_owned(),
+            reason: message.into(),
+        }
+    }
+
+    /// Create an invalid input error with explicit field name and reason.
+    pub fn invalid_input_field(field: impl Into<String>, reason: impl Into<String>) -> Self {
         Self::InvalidInput {
             field: field.into(),
             reason: reason.into(),
