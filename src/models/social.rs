@@ -11,8 +11,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::IntelligenceError;
-
 // ============================================================================
 // Enums
 // ============================================================================
@@ -44,7 +42,7 @@ impl Display for FriendStatus {
 }
 
 impl FromStr for FriendStatus {
-    type Err = IntelligenceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
@@ -52,10 +50,7 @@ impl FromStr for FriendStatus {
             "accepted" => Ok(Self::Accepted),
             "declined" => Ok(Self::Declined),
             "blocked" => Ok(Self::Blocked),
-            _ => Err(IntelligenceError::invalid_input_field(
-                "value",
-                format!("Invalid friend status: {s}"),
-            )),
+            _ => Err(format!("Invalid friend status: {s}")),
         }
     }
 }
@@ -100,16 +95,13 @@ impl Display for ShareVisibility {
 }
 
 impl FromStr for ShareVisibility {
-    type Err = IntelligenceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "friends_only" => Ok(Self::FriendsOnly),
             "public" => Ok(Self::Public),
-            _ => Err(IntelligenceError::invalid_input_field(
-                "value",
-                format!("Invalid share visibility: {s}"),
-            )),
+            _ => Err(format!("Invalid share visibility: {s}")),
         }
     }
 }
@@ -160,7 +152,7 @@ impl Display for InsightType {
 }
 
 impl FromStr for InsightType {
-    type Err = IntelligenceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
@@ -170,10 +162,7 @@ impl FromStr for InsightType {
             "recovery" => Ok(Self::Recovery),
             "motivation" => Ok(Self::Motivation),
             "coaching_insight" => Ok(Self::CoachingInsight),
-            _ => Err(IntelligenceError::invalid_input_field(
-                "value",
-                format!("Invalid insight type: {s}"),
-            )),
+            _ => Err(format!("Invalid insight type: {s}")),
         }
     }
 }
@@ -232,7 +221,7 @@ impl Display for ReactionType {
 }
 
 impl FromStr for ReactionType {
-    type Err = IntelligenceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
@@ -240,10 +229,7 @@ impl FromStr for ReactionType {
             "celebrate" => Ok(Self::Celebrate),
             "inspire" => Ok(Self::Inspire),
             "support" => Ok(Self::Support),
-            _ => Err(IntelligenceError::invalid_input_field(
-                "value",
-                format!("Invalid reaction type: {s}"),
-            )),
+            _ => Err(format!("Invalid reaction type: {s}")),
         }
     }
 }
@@ -298,7 +284,7 @@ impl Display for TrainingPhase {
 }
 
 impl FromStr for TrainingPhase {
-    type Err = IntelligenceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
@@ -306,10 +292,7 @@ impl FromStr for TrainingPhase {
             "build" => Ok(Self::Build),
             "peak" => Ok(Self::Peak),
             "recovery" => Ok(Self::Recovery),
-            _ => Err(IntelligenceError::invalid_input_field(
-                "value",
-                format!("Invalid training phase: {s}"),
-            )),
+            _ => Err(format!("Invalid training phase: {s}")),
         }
     }
 }
