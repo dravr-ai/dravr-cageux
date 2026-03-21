@@ -1,0 +1,47 @@
+# ABOUTME: Unified REST API + MCP server for dravr-cageux sports science engine
+# ABOUTME: Exposes intelligence algorithms via HTTP endpoints and MCP protocol
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 dravr.ai
+
+[package]
+name = "dravr-cageux-server"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Unified REST API + MCP server for dravr-cageux sports science intelligence engine"
+repository = "https://github.com/dravr-ai/dravr-cageux"
+readme = "README.md"
+keywords = ["fitness", "sports-science", "rest", "mcp", "server"]
+categories = ["science", "web-programming::http-server"]
+publish = false
+
+[lib]
+name = "dravr_cageux_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dravr-cageux-server"
+path = "src/main.rs"
+
+[dependencies]
+dravr-cageux = { path = "../..", version = "0.1.0" }
+dravr-cageux-mcp = { path = "../dravr-cageux-mcp", version = "0.1.0" }
+async-trait = "0.1"
+axum = "0.8"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.50", features = ["full"] }
+tokio-stream = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tokio = { version = "1.50", features = ["full", "test-util"] }
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true
