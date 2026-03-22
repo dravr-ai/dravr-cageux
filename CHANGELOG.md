@@ -1,5 +1,4 @@
 # Changelog
 
-## [0.2.0] — 2026-03-22
-
-
+All notable changes to this project will be documented in this file.
+Versions are managed by the [release workflow](.github/workflows/release.yml).
