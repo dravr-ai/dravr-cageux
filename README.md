@@ -184,15 +184,6 @@ dravr-cageux/
 └── tests/                      # Integration tests (algorithms, models, E2E server)
 ```
 
-### Design Principles
-
-- **100% standalone** — zero dependency on dravr-platform or pierre-core
-- **Pure algorithms** — core crate has no HTTP, database, or async runtime deps
-- **Trait-based tools** — `McpTool` trait for pluggable MCP tool registration
-- **Enum-based dispatch** — algorithm selection via type-safe enums, not strings
-- **Builder pattern** — `ActivityBuilder` for constructing Activity instances
-- **Structured errors** — `IntelligenceError` with typed variants, not string-based
-
 ## License
 
 Licensed under either of:
