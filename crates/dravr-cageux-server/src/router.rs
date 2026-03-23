@@ -6,30 +6,18 @@
 
 use std::sync::Arc;
 
-use axum::extract::State;
-use axum::Json;
 use axum::Router;
 
-use dravr_cageux_mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
-use dravr_cageux_mcp::server::McpServer;
+use dravr_cageux_mcp::state::ServerState;
+use dravr_cageux_mcp::McpServer;
 
 use crate::health::health_check;
 
-/// Shared application state for route handlers
-type AppState = Arc<McpServer>;
-
 /// Build the application router with all routes
-pub fn build_router(mcp_server: Arc<McpServer>) -> Router {
+pub fn build_router(mcp_server: Arc<McpServer<ServerState>>) -> Router {
+    let mcp_routes = dravr_tronc::mcp::transport::http::mcp_router(mcp_server);
+
     Router::new()
         .route("/health", axum::routing::get(health_check))
-        .route("/mcp", axum::routing::post(handle_mcp))
-        .with_state(mcp_server)
-}
-
-async fn handle_mcp(
-    State(server): State<AppState>,
-    Json(request): Json<JsonRpcRequest>,
-) -> Json<JsonRpcResponse> {
-    let response = server.handle_request(request).await;
-    Json(response)
+        .merge(mcp_routes)
 }

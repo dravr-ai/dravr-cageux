@@ -171,12 +171,11 @@ dravr-cageux/
 │   └── ...                     # Pattern detection, goal engine, recommendations
 │
 ├── crates/
-│   ├── dravr-cageux-mcp/       # MCP server (JSON-RPC 2.0, stdio + HTTP)
-│   │   ├── src/server.rs       # JSON-RPC router (initialize, tools/list, tools/call)
-│   │   ├── src/tools/          # McpTool trait + ToolRegistry
-│   │   └── src/transport/      # StdioTransport, HttpTransport
+│   ├── dravr-cageux-mcp/       # MCP server (library + binary crate, powered by dravr-tronc)
+│   │   ├── src/state.rs        # SharedState with intelligence config
+│   │   └── src/tools/          # Domain-specific MCP tool implementations
 │   │
-│   └── dravr-cageux-server/    # Unified REST API + MCP server
+│   └── dravr-cageux-server/    # Unified REST API + MCP server (binary crate, powered by dravr-tronc)
 │       ├── src/router.rs       # Axum routes (/health, /mcp)
 │       ├── src/auth.rs         # Bearer token middleware
 │       └── src/main.rs         # CLI (serve, stdio)

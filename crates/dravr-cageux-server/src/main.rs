@@ -7,12 +7,11 @@
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
+use tokio::sync::RwLock;
 use tracing::info;
 
 use dravr_cageux::config::ServerConfig;
-use dravr_cageux_mcp::state::create_shared_state;
-use dravr_cageux_mcp::transport::stdio::StdioTransport;
-use dravr_cageux_mcp::transport::McpTransport;
+use dravr_cageux_mcp::state::ServerState;
 use dravr_cageux_mcp::{build_tool_registry, McpServer};
 use dravr_cageux_server::router::build_router;
 
@@ -53,20 +52,21 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let cli = Cli::parse();
+
+    dravr_tronc::server::tracing_init::init(&cli.transport);
+
     let config = ServerConfig::from_env().unwrap_or_default();
 
-    let state = create_shared_state();
+    let state = Arc::new(RwLock::new(ServerState::new()));
     let tools = build_tool_registry();
-    let mcp_server = Arc::new(McpServer::new(state, tools));
+    let mcp_server = Arc::new(McpServer::new(
+        "dravr-cageux",
+        env!("CARGO_PKG_VERSION"),
+        tools,
+        state,
+    ));
 
     match cli.command {
         Some(Command::Serve { host, port }) => {
@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let host = cli.host.unwrap_or(config.host);
             let port = cli.port.unwrap_or(config.port);
             if cli.transport == "stdio" {
-                StdioTransport.serve(mcp_server).await?;
+                dravr_tronc::mcp::transport::stdio::run(mcp_server).await?;
             } else {
                 serve_http(mcp_server, &host, port).await?;
             }
@@ -89,10 +89,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn serve_http(
-    mcp_server: Arc<McpServer>,
+    mcp_server: Arc<McpServer<ServerState>>,
     host: &str,
     port: u16,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let app = build_router(mcp_server);
     let addr = format!("{host}:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;

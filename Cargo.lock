@@ -295,34 +295,43 @@ dependencies = [
 name = "dravr-cageux-mcp"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "axum",
  "clap",
  "dravr-cageux",
- "futures",
- "serde",
- "serde_json",
+ "dravr-tronc",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
 name = "dravr-cageux-server"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "axum",
  "clap",
  "dravr-cageux",
  "dravr-cageux-mcp",
- "futures",
+ "dravr-tronc",
  "http-body-util",
- "serde",
  "serde_json",
  "tokio",
- "tokio-stream",
  "tower",
+ "tracing",
+]
+
+[[package]]
+name = "dravr-tronc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3631a162e3ba1f1fcaeaec62963bb4d12296e1ee4efd20213cf49f54faa8491f"
+dependencies = [
+ "async-trait",
+ "axum",
+ "clap",
+ "futures",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1003,6 +1012,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "subtle"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1074,17 +1089,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tokio-stream"
-version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32da49809aab5c3bc678af03902d4ccddea2a87d028d86392a4b1560c6906c70"
-dependencies = [
- "futures-core",
- "pin-project-lite",
- "tokio",
 ]
 
 [[package]]
