@@ -278,7 +278,7 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "dravr-cageux"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "dravr-cageux-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "dravr-cageux",
@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "dravr-cageux-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "clap",
@@ -320,9 +320,9 @@ dependencies = [
 
 [[package]]
 name = "dravr-tronc"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3631a162e3ba1f1fcaeaec62963bb4d12296e1ee4efd20213cf49f54faa8491f"
+checksum = "b290bc964dd60fc453de9d97b7581b225fb42f16f30f8d5d00c36dafb2fbc0ba"
 dependencies = [
  "async-trait",
  "axum",
