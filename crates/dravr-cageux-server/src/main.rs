@@ -55,7 +55,7 @@ enum Command {
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let cli = Cli::parse();
 
-    dravr_tronc::server::tracing_init::init(&cli.transport);
+    dravr_tronc::server::tracing_init::init_with_notifications(&cli.transport);
 
     let config = ServerConfig::from_env().unwrap_or_default();
 
