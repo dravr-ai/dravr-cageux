@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3] — 2026-03-31
+
+### Added
+
+- feat: integrate dravr-build-config for shared validation and lint rules
+
+
+
 ## [0.1.2] — 2026-03-26
 
 ### Other
