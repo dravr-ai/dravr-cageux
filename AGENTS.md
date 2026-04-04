@@ -1,3 +1,15 @@
+# Cageux — Sports Science Intelligence Engine
+
+**Sports science calculations library** for fitness/training analysis. Core capabilities:
+- Training load: TSS, TRIMP, ATL/CTL/TSB
+- Performance: VDOT, FTP, VO2max, lactate threshold
+- Recovery: HRV-based scoring, sleep debt, fatigue indicators
+- Nutrition: BMR (Mifflin-St Jeor), macro targets, ISSN timing guidelines
+
+See [README.md](README.md) for formula citations.
+
+---
+
 ## Git Workflow: NO Pull Requests
 
 
