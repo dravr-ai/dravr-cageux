@@ -248,4 +248,64 @@ impl SportType {
             Self::Other(_name) => "activity", // Could use name but keeping generic
         }
     }
+
+    /// Returns the moderate-effort pace baseline (seconds per km) for this sport type.
+    ///
+    /// Used by the pace-based TSS fallback estimation. Each sport has a characteristic
+    /// pace that represents moderate effort — the TSS formula normalizes actual pace
+    /// against this baseline.
+    ///
+    /// Returns `None` for activities that are not pace-based (strength, yoga, etc.)
+    /// and should use duration-only TSS estimation instead.
+    #[must_use]
+    pub const fn pace_baseline_s_per_km(&self) -> Option<f64> {
+        use crate::physiological_constants::training_load::pace_baselines::{
+            CYCLING_S_PER_KM, GRAVEL_S_PER_KM, HIKING_S_PER_KM, MTB_S_PER_KM, PADDLING_S_PER_KM,
+            RUNNING_S_PER_KM, SKATING_S_PER_KM, SWIMMING_S_PER_KM, WALKING_S_PER_KM,
+            XC_SKIING_S_PER_KM,
+        };
+
+        match self {
+            // Running
+            Self::Run | Self::VirtualRun | Self::Other(_) => Some(RUNNING_S_PER_KM),
+
+            // Trail running / hiking / snowshoe share hiking baseline
+            Self::TrailRunning | Self::Hike | Self::Snowshoe => Some(HIKING_S_PER_KM),
+
+            // Road cycling (including e-bike and indoor)
+            Self::Ride | Self::VirtualRide | Self::EbikeRide => Some(CYCLING_S_PER_KM),
+            Self::MountainBike => Some(MTB_S_PER_KM),
+            Self::GravelRide => Some(GRAVEL_S_PER_KM),
+
+            Self::Walk => Some(WALKING_S_PER_KM),
+            Self::Swim => Some(SWIMMING_S_PER_KM),
+
+            // Winter sports with distance
+            Self::CrossCountrySkiing | Self::BackcountrySkiing => Some(XC_SKIING_S_PER_KM),
+
+            // Water sports with distance
+            Self::Kayaking | Self::Canoeing | Self::Rowing | Self::Paddleboarding => {
+                Some(PADDLING_S_PER_KM)
+            }
+
+            // Skating
+            Self::IceSkating | Self::InlineSkating | Self::Skateboarding => Some(SKATING_S_PER_KM),
+
+            // Non-distance activities → return None for duration-only estimation
+            Self::AlpineSkiing
+            | Self::Snowboarding
+            | Self::Surfing
+            | Self::Kitesurfing
+            | Self::StrengthTraining
+            | Self::Crossfit
+            | Self::Pilates
+            | Self::Yoga
+            | Self::Workout
+            | Self::RockClimbing
+            | Self::Soccer
+            | Self::Basketball
+            | Self::Tennis
+            | Self::Golf => None,
+        }
+    }
 }

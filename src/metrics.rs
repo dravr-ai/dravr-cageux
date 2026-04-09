@@ -248,27 +248,37 @@ impl MetricsCalculator {
             }
         }
 
-        // 3. Fallback: Pace-based TSS estimation for running activities without sensors
-        if let Some(distance_m) = activity.distance_meters() {
-            if distance_m > 0.0 && activity.duration_seconds() > 0 {
-                // Estimate TSS from pace relative to moderate effort
-                // Assumes 10 min/km as baseline moderate effort (TSS = duration in hours * 100)
-                #[allow(clippy::cast_precision_loss)]
-                let pace_s_per_km = activity.duration_seconds() as f64 / (distance_m / 1000.0);
-                let baseline_pace = 600.0; // 10 min/km in seconds
+        // 3. Fallback: Pace-based TSS estimation using sport-type-aware baselines.
+        //    Each sport type defines its own moderate-effort pace (e.g., 10 min/km
+        //    for running, 2 min/km for cycling). Using a single running baseline
+        //    for cycling would inflate TSS ~5x because cyclists cover km much faster.
+        if let Some(baseline_pace) = activity.sport_type().pace_baseline_s_per_km() {
+            if let Some(distance_m) = activity.distance_meters() {
+                if distance_m > 0.0 && activity.duration_seconds() > 0 {
+                    #[allow(clippy::cast_precision_loss)]
+                    let pace_s_per_km = activity.duration_seconds() as f64 / (distance_m / 1000.0);
 
-                // Intensity factor: faster pace = higher intensity
-                // Running at baseline pace = IF of 0.75 (moderate)
-                // Running 20% faster (8 min/km) = IF of ~0.9
-                let pace_ratio = baseline_pace / pace_s_per_km;
-                let intensity_factor = (pace_ratio * 0.75).clamp(0.5, 1.2);
+                    // Intensity factor: faster-than-baseline = higher intensity.
+                    // At baseline pace → IF = 0.75 (moderate effort).
+                    // 20% faster → IF ≈ 0.9;  max clamp at 1.2 (race effort).
+                    let pace_ratio = baseline_pace / pace_s_per_km;
+                    let intensity_factor = (pace_ratio * 0.75).clamp(0.5, 1.2);
 
-                let tss = duration_hours * intensity_factor.powi(2) * 100.0;
-                return Some(tss);
+                    let tss = duration_hours * intensity_factor.powi(2) * 100.0;
+                    return Some(tss);
+                }
             }
         }
 
-        // 4. No data available for TSS calculation
+        // 4. Duration-only fallback for non-distance activities (strength, yoga, etc.)
+        //    Uses a conservative IF representing moderate gym-style exertion.
+        if activity.duration_seconds() > 0 {
+            use crate::physiological_constants::training_load::pace_baselines::DURATION_ONLY_INTENSITY_FACTOR;
+            let tss = duration_hours * DURATION_ONLY_INTENSITY_FACTOR.powi(2) * 100.0;
+            return Some(tss);
+        }
+
+        // 5. No data available for TSS calculation
         None
     }
 

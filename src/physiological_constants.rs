@@ -112,6 +112,42 @@ pub mod training_load {
     pub const HIGH_TSS_THRESHOLD: f64 = 150.0;
     /// Minimum TSS value considered a low-intensity workout
     pub const LOW_TSS_THRESHOLD: f64 = 50.0;
+
+    /// Pace-based TSS estimation baselines by sport category (seconds per km).
+    ///
+    /// Each baseline represents a moderate-effort pace for that sport type.
+    /// The TSS fallback formula uses: `IF = (baseline / actual_pace * 0.75).clamp(0.5, 1.2)`
+    ///
+    /// References:
+    /// - Coggan, A. (2003). Training and Racing Using a Power Meter
+    /// - Allen, H. & Coggan, A. (2010). Training and Racing with a Power Meter, 2nd ed.
+    pub mod pace_baselines {
+        /// Running: 10 min/km moderate recreational pace
+        pub const RUNNING_S_PER_KM: f64 = 600.0;
+        /// Cycling: 2 min/km (30 km/h) moderate road ride
+        pub const CYCLING_S_PER_KM: f64 = 120.0;
+        /// Mountain bike: 3 min/km (20 km/h) moderate off-road
+        pub const MTB_S_PER_KM: f64 = 180.0;
+        /// Gravel cycling: 2:30/km (24 km/h) mixed terrain
+        pub const GRAVEL_S_PER_KM: f64 = 150.0;
+        /// Swimming: 2:00/100m = 1200 s/km moderate pool pace
+        pub const SWIMMING_S_PER_KM: f64 = 1200.0;
+        /// Walking: 10 min/km (6 km/h) moderate walk
+        pub const WALKING_S_PER_KM: f64 = 600.0;
+        /// Hiking: 12 min/km (5 km/h) moderate trail with elevation
+        pub const HIKING_S_PER_KM: f64 = 720.0;
+        /// Cross-country skiing: 5 min/km moderate Nordic pace
+        pub const XC_SKIING_S_PER_KM: f64 = 300.0;
+        /// Kayaking/rowing: 4 min/km moderate water pace
+        pub const PADDLING_S_PER_KM: f64 = 240.0;
+        /// Inline skating: 3 min/km (20 km/h) moderate pace
+        pub const SKATING_S_PER_KM: f64 = 180.0;
+
+        /// Duration-only TSS intensity factor for activities without distance
+        /// (strength training, yoga, etc.). Represents moderate exertion.
+        /// TSS = hours * IF² * 100, with IF=0.65 → ~42 TSS/hour
+        pub const DURATION_ONLY_INTENSITY_FACTOR: f64 = 0.65;
+    }
 }
 
 /// Duration thresholds for workout classification
