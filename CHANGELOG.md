@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4] — 2026-04-09
+
+### Fixed
+
+- fix: use sport-type-aware pace baselines for TSS fallback estimation Single running baseline inflated cycling TSS ~5x; each sport now has its own moderate-effort baseline
+
+
+
 ## [0.1.3] — 2026-03-31
 
 ### Added
