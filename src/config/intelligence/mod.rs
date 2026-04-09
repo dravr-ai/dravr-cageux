@@ -45,7 +45,7 @@ pub use activity::{
     ActivityAnalysisConfig, ActivityAnalyzerConfig, ActivityInsightsConfig, ActivityScoringConfig,
     HeartRateZonesConfig, PowerZonesConfig, SeverityThresholds,
 };
-pub use algorithms::AlgorithmConfig;
+pub use algorithms::{AlgorithmConfig, TssFallbackConfig};
 pub use error::ConfigError;
 pub use goals::{
     DifficultyDistribution, FeasibilityConfig, GoalEngineConfig, ProgressionConfig,
@@ -569,6 +569,24 @@ impl IntelligenceConfig<true> {
         // Algorithm selection overrides
         Self::apply_env_var("PIERRE_TSS_ALGORITHM", &mut self.algorithms.tss)?;
         Self::apply_env_var("PIERRE_MAXHR_ALGORITHM", &mut self.algorithms.maxhr)?;
+
+        // TSS fallback configuration overrides
+        Self::apply_env_var(
+            "INTELLIGENCE_TSS_FALLBACK_MODERATE_IF",
+            &mut self.algorithms.tss_fallback.moderate_intensity_factor,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TSS_FALLBACK_MIN_IF",
+            &mut self.algorithms.tss_fallback.min_intensity_factor,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TSS_FALLBACK_MAX_IF",
+            &mut self.algorithms.tss_fallback.max_intensity_factor,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TSS_FALLBACK_NORMALIZATION",
+            &mut self.algorithms.tss_fallback.normalization_constant,
+        )?;
 
         Ok(self)
     }
