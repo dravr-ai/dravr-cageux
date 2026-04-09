@@ -689,7 +689,7 @@ pub mod api_limits {
     // Configurable via environment variables for different LLM providers
 
     /// Default safe limit for TOON format + summary mode (most compact)
-    const DEFAULT_SAFE_LIMIT_TOON_SUMMARY: usize = 200;
+    const DEFAULT_SAFE_LIMIT_TOON_SUMMARY: usize = 20;
 
     /// Default safe limit for TOON format + detailed mode
     const DEFAULT_SAFE_LIMIT_TOON_DETAILED: usize = 25;
