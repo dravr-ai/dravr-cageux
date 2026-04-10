@@ -7,6 +7,7 @@
 //! Insight generation and management for athlete intelligence
 
 use crate::models::Activity;
+use crate::types::LocationContext;
 use crate::physiological_constants::{
     activity_scoring::{BASE_ACTIVITY_SCORE, COMPLETION_BONUS, STANDARD_BONUS},
     business_thresholds::ACHIEVEMENT_DISTANCE_THRESHOLD_KM,
@@ -399,7 +400,7 @@ impl InsightGenerator {
 #[derive(Debug, Clone)]
 pub struct ActivityContext {
     /// Geographic location context for weather and terrain analysis
-    pub location: Option<crate::types::LocationContext>,
+    pub location: Option<LocationContext>,
     /// Recent activity history for trend analysis
     pub recent_activities: Option<Vec<Activity>>,
 }

@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 /// Enumeration of supported sport/activity types
@@ -113,7 +115,7 @@ impl SportType {
     #[must_use]
     pub fn from_provider_string(
         provider_sport: &str,
-        sport_mappings: Option<&std::collections::HashMap<String, String>>,
+        sport_mappings: Option<&HashMap<String, String>>,
     ) -> Self {
         // Check if we have a configured mapping
         if let Some(mappings) = sport_mappings {

@@ -7,11 +7,12 @@
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
+use dravr_tronc::server::auth;
 
 /// Bearer token authentication middleware.
 ///
 /// Reads `CAGEUX_API_TOKEN` from environment. If unset or empty, all requests
 /// pass through (auth disabled). Otherwise, validates the `Authorization: Bearer <token>` header.
 pub async fn require_auth(request: Request, next: Next) -> Response {
-    dravr_tronc::server::auth::require_auth("CAGEUX_API_TOKEN", request, next).await
+    auth::require_auth("CAGEUX_API_TOKEN", request, next).await
 }

@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
+use std::error::Error;
+use std::process;
 use std::sync::Arc;
 
 use clap::Parser;
@@ -12,6 +14,8 @@ use tracing::info;
 
 use dravr_cageux_mcp::state::ServerState;
 use dravr_cageux_mcp::{build_tool_registry, McpServer};
+use dravr_tronc::mcp::transport::{http, stdio};
+use dravr_tronc::server::{cli::McpArgs, tracing_init};
 
 #[derive(Parser)]
 #[command(
@@ -21,14 +25,14 @@ use dravr_cageux_mcp::{build_tool_registry, McpServer};
 )]
 struct Cli {
     #[command(flatten)]
-    server: dravr_tronc::server::cli::McpArgs,
+    server: McpArgs,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let cli = Cli::parse();
 
-    dravr_tronc::server::tracing_init::init(&cli.server.transport);
+    tracing_init::init(&cli.server.transport);
 
     let state = Arc::new(RwLock::new(ServerState::new()));
     let tools = build_tool_registry();
@@ -45,14 +49,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     match cli.server.transport.as_str() {
-        "stdio" => dravr_tronc::mcp::transport::stdio::run(server).await?,
+        "stdio" => stdio::run(server).await?,
         "http" => {
-            dravr_tronc::mcp::transport::http::serve(server, &cli.server.host, cli.server.port)
-                .await?;
+            http::serve(server, &cli.server.host, cli.server.port).await?;
         }
         other => {
             eprintln!("Unknown transport: {other}. Use 'stdio' or 'http'.");
-            std::process::exit(1);
+            process::exit(1);
         }
     }
 

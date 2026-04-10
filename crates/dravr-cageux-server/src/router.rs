@@ -6,18 +6,20 @@
 
 use std::sync::Arc;
 
+use axum::routing::get;
 use axum::Router;
 
 use dravr_cageux_mcp::state::ServerState;
 use dravr_cageux_mcp::McpServer;
+use dravr_tronc::mcp::transport::http::mcp_router;
 
 use crate::health::health_check;
 
 /// Build the application router with all routes
 pub fn build_router(mcp_server: Arc<McpServer<ServerState>>) -> Router {
-    let mcp_routes = dravr_tronc::mcp::transport::http::mcp_router(mcp_server);
+    let mcp_routes = mcp_router(mcp_server);
 
     Router::new()
-        .route("/health", axum::routing::get(health_check))
+        .route("/health", get(health_check))
         .merge(mcp_routes)
 }

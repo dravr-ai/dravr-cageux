@@ -4,9 +4,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
+use std::error::Error;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -14,6 +16,8 @@ use dravr_cageux::config::ServerConfig;
 use dravr_cageux_mcp::state::ServerState;
 use dravr_cageux_mcp::{build_tool_registry, McpServer};
 use dravr_cageux_server::router::build_router;
+use dravr_tronc::mcp::transport::stdio;
+use dravr_tronc::server::tracing_init;
 
 #[derive(Parser)]
 #[command(
@@ -52,10 +56,10 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let cli = Cli::parse();
 
-    dravr_tronc::server::tracing_init::init_with_notifications(&cli.transport);
+    tracing_init::init_with_notifications(&cli.transport);
 
     let config = ServerConfig::from_env().unwrap_or_default();
 
@@ -78,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let host = cli.host.unwrap_or(config.host);
             let port = cli.port.unwrap_or(config.port);
             if cli.transport == "stdio" {
-                dravr_tronc::mcp::transport::stdio::run(mcp_server).await?;
+                stdio::run(mcp_server).await?;
             } else {
                 serve_http(mcp_server, &host, port).await?;
             }
@@ -92,10 +96,10 @@ async fn serve_http(
     mcp_server: Arc<McpServer<ServerState>>,
     host: &str,
     port: u16,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let app = build_router(mcp_server);
     let addr = format!("{host}:{port}");
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    let listener = TcpListener::bind(&addr).await?;
 
     info!("dravr-cageux server listening on {addr}");
     info!("  Health: GET http://{addr}/health");
