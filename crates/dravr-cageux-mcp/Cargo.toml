@@ -6,7 +6,7 @@
 
 [package]
 name = "dravr-cageux-mcp"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "MCP server for dravr-cageux sports science engine — expose intelligence via Model Context Protocol"
@@ -25,7 +25,7 @@ name = "dravr-cageux-mcp"
 path = "src/main.rs"
 
 [dependencies]
-dravr-cageux = { path = "../..", version = "0.1.7" }
+dravr-cageux = { path = "../..", version = "0.1.8" }
 dravr-tronc = "0.2"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1.50", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "signal", "time"] }
