@@ -7,13 +7,13 @@
 //! Insight generation and management for athlete intelligence
 
 use crate::models::Activity;
-use crate::types::LocationContext;
 use crate::physiological_constants::{
     activity_scoring::{BASE_ACTIVITY_SCORE, COMPLETION_BONUS, STANDARD_BONUS},
     business_thresholds::ACHIEVEMENT_DISTANCE_THRESHOLD_KM,
     fitness_score_thresholds::GOOD_FITNESS_THRESHOLD,
     performance_calculation::MAX_EFFORT_SCORE,
 };
+use crate::types::LocationContext;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
