@@ -28,7 +28,7 @@ path = "src/main.rs"
 dravr-cageux = { path = "../..", version = "0.1.7" }
 dravr-tronc = "0.2"
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1.50", features = ["full"] }
+tokio = { version = "1.50", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "signal", "time"] }
 tracing = "0.1"
 
 [dev-dependencies]
