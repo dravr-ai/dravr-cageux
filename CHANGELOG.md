@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0] — 2026-04-11
+
+### Added
+
+- feat: add seasonality module for location-aware sport recommendations Season detection, 36-sport compatibility matrix, alternative suggestions, 24 tests
+
+
+
 ## [0.1.8] — 2026-04-10
 
 ### Other
