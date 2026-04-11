@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::seasonality::SeasonalContext;
+
 /// User fitness profile containing physical attributes and training preferences
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserFitnessProfile {
@@ -27,6 +29,8 @@ pub struct UserFitnessProfile {
     pub training_history_months: i32,
     /// User's training preferences and constraints
     pub preferences: UserPreferences,
+    /// Seasonal context from the user's location for seasonal recommendations
+    pub seasonal_context: Option<SeasonalContext>,
 }
 
 /// Fitness level classification

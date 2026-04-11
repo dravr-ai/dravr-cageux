@@ -110,6 +110,8 @@ pub mod recipes;
 pub mod recommendation_engine;
 /// Recovery score calculation and recommendations
 pub mod recovery_calculator;
+/// Season detection and sport-season compatibility
+pub mod seasonality;
 /// Sleep quality analysis and HRV tracking
 pub mod sleep_analysis;
 

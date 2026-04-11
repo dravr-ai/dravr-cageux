@@ -1,11 +1,11 @@
 // ABOUTME: Fitness data analysis engine providing comprehensive workout and performance analytics
 // ABOUTME: Calculates training zones, efficiency metrics, power analysis, and personalized insights
 //
-// NOTE: All `.clone()` calls in this file are Safe - necessary for ownership transfers
-// in analysis pipelines and result construction.
-//
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
+//
+// NOTE: All `.clone()` calls in this file are Safe - necessary for ownership transfers
+// in analysis pipelines and result construction.
 
 //! Activity analyzer for generating intelligent insights
 
@@ -373,6 +373,7 @@ impl ActivityAnalyzer {
             time_of_day,
             days_since_last_activity: None, // Would calculate from historical data
             weekly_load: None,              // Would calculate from recent activities
+            seasonal_context: None,         // Set by caller with location data
         }
     }
 

@@ -13,6 +13,7 @@ pub use crate::metrics::AdvancedMetrics;
 use crate::physiological_constants::fitness_score_thresholds::{
     EXCELLENT_PERFORMANCE_THRESHOLD, GOOD_PERFORMANCE_THRESHOLD, MODERATE_PERFORMANCE_THRESHOLD,
 };
+pub use crate::seasonality::SeasonalContext;
 
 // Re-export commonly needed items so modules can import from crate::types
 pub use crate::metrics::MetricsCalculator;
@@ -129,6 +130,8 @@ pub struct ContextualFactors {
     pub days_since_last_activity: Option<i32>,
     /// Weekly training load context
     pub weekly_load: Option<ContextualWeeklyLoad>,
+    /// Seasonal context for location-aware recommendations
+    pub seasonal_context: Option<SeasonalContext>,
 }
 
 /// Weather conditions during activity
@@ -159,6 +162,10 @@ pub struct LocationContext {
     pub terrain_type: Option<String>,
     /// Human-readable display name for the location
     pub display_name: String,
+    /// Latitude coordinate
+    pub latitude: Option<f64>,
+    /// Longitude coordinate
+    pub longitude: Option<f64>,
 }
 
 /// Time of day categorization
@@ -235,6 +242,7 @@ impl ActivityIntelligence {
                 time_of_day: TimeOfDay::Morning,
                 days_since_last_activity: None,
                 weekly_load: None,
+                seasonal_context: None,
             },
             generated_at: Utc::now(),
         }
@@ -582,6 +590,8 @@ pub enum RecommendationType {
     Equipment,
     /// Recommendation about training strategy
     Strategy,
+    /// Recommendation based on seasonal appropriateness for the user's location
+    Seasonal,
 }
 
 /// Priority level for recommendations

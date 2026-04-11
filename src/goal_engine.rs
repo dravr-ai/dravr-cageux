@@ -15,7 +15,7 @@ use crate::config::intelligence::{
     DefaultStrategy, GoalEngineConfig, IntelligenceConfig, IntelligenceStrategy,
 };
 use crate::error::{IntelligenceError, IntelligenceResult};
-use crate::models::Activity;
+use crate::models::{Activity, SportType};
 use crate::physiological_constants::{
     consistency::{
         MILESTONE_ACHIEVEMENT_THRESHOLD, MIN_ACTIVITY_COUNT_FOR_ANALYSIS,
@@ -30,6 +30,7 @@ use crate::physiological_constants::{
     milestones::{MILESTONE_NAMES, MILESTONE_PERCENTAGES},
     time_periods::{GOAL_ADJUSTMENT_THRESHOLD, GOAL_ANALYSIS_WEEKS, GOAL_DAYS_REMAINING_THRESHOLD},
 };
+use crate::seasonality::sport_seasonal_suitability;
 use crate::types::{
     AdvancedInsight, Confidence, Deserialize, FitnessLevel, Goal, GoalType, InsightSeverity,
     Milestone, ProgressReport, Serialize, TimeFrame, UserFitnessProfile,
@@ -512,6 +513,21 @@ impl<S: IntelligenceStrategy> GoalEngineTrait for AdvancedGoalEngine<S> {
         let mut suggestions = self.generate_sport_based_suggestions(&sport_stats, activities);
 
         suggestions.extend(Self::generate_fitness_level_suggestions(user_profile));
+
+        // Filter out goals for sports that are seasonally inappropriate
+        if let Some(ref ctx) = user_profile.seasonal_context {
+            suggestions.retain(|suggestion| {
+                let sport_name = match &suggestion.goal_type {
+                    GoalType::Distance { sport, .. }
+                    | GoalType::Time { sport, .. }
+                    | GoalType::Frequency { sport, .. } => sport.as_str(),
+                    GoalType::Performance { .. } | GoalType::Custom { .. } => return true,
+                };
+                let sport = SportType::from_internal_string(sport_name);
+                sport_seasonal_suitability(&sport, &ctx.season).is_recommended()
+            });
+        }
+
         Self::prioritize_suggestions(&mut suggestions);
 
         Ok(suggestions.into_iter().take(5).collect())

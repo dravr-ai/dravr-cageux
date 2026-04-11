@@ -43,7 +43,10 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{naive::Days, Utc};
 
-use crate::models::Activity;
+use crate::models::{Activity, SportType};
+use crate::seasonality::{
+    seasonal_alternatives, sport_seasonal_suitability, SeasonalContext, SeasonalSuitability,
+};
 
 /// Trait for generating training recommendations
 #[async_trait::async_trait]
@@ -564,6 +567,82 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
 
         recommendations
     }
+
+    /// Generate recommendations based on seasonal appropriateness of recent activities
+    ///
+    /// Checks if the user's primary sport is suitable for the current season
+    /// at their location, and suggests alternatives when it is not.
+    fn generate_seasonal_recommendations(
+        analysis: &TrainingPatternAnalysis,
+        seasonal_context: Option<&SeasonalContext>,
+    ) -> Vec<TrainingRecommendation> {
+        let mut recommendations = Vec::new();
+
+        let Some(ctx) = seasonal_context else {
+            return recommendations;
+        };
+
+        // Check if the user's primary sport is seasonally appropriate
+        let primary_sport = SportType::from_internal_string(&analysis.primary_sport);
+        let suitability = sport_seasonal_suitability(&primary_sport, &ctx.season);
+
+        if suitability.is_recommended() {
+            return recommendations;
+        }
+
+        let alternatives = seasonal_alternatives(&primary_sport, &ctx.season);
+        let alt_names: Vec<&str> = alternatives.iter().map(SportType::display_name).collect();
+
+        let description = if alt_names.is_empty() {
+            format!(
+                "{} is not ideal during {}. Consider indoor alternatives.",
+                primary_sport.display_name(),
+                ctx.season.display_name(),
+            )
+        } else {
+            format!(
+                "{} is not ideal during {}. Consider switching to: {}.",
+                primary_sport.display_name(),
+                ctx.season.display_name(),
+                alt_names.join(", "),
+            )
+        };
+
+        let mut steps: Vec<String> = alternatives
+            .iter()
+            .map(|alt| format!("Try {} as a seasonal alternative", alt.display_name()))
+            .collect();
+        steps.push(format!(
+            "Check local conditions before heading out for {}",
+            primary_sport.display_name()
+        ));
+
+        let priority = match suitability {
+            SeasonalSuitability::Inappropriate => RecommendationPriority::High,
+            SeasonalSuitability::Marginal => RecommendationPriority::Medium,
+            _ => RecommendationPriority::Low,
+        };
+
+        recommendations.push(TrainingRecommendation {
+            recommendation_type: RecommendationType::Seasonal,
+            title: format!(
+                "Seasonal Activity Adjustment for {}",
+                ctx.season.display_name()
+            ),
+            description,
+            priority,
+            confidence: Confidence::High,
+            rationale: format!(
+                "Based on your location ({:.1}° latitude) the current season is {}. \
+                 Some outdoor activities may not be feasible due to weather conditions.",
+                ctx.latitude,
+                ctx.season.display_name(),
+            ),
+            actionable_steps: steps,
+        });
+
+        recommendations
+    }
 }
 
 #[async_trait::async_trait]
@@ -588,6 +667,16 @@ impl RecommendationEngineTrait for AdvancedRecommendationEngine {
 
         // Add sport diversity recommendations using sport_diversity and primary_sport fields
         recommendations.extend(Self::generate_sport_diversity_recommendations(&analysis));
+
+        // Add seasonal appropriateness recommendations
+        let seasonal_ctx = self
+            .user_profile
+            .as_ref()
+            .and_then(|p| p.seasonal_context.as_ref());
+        recommendations.extend(Self::generate_seasonal_recommendations(
+            &analysis,
+            seasonal_ctx,
+        ));
 
         // Fitness level specific recommendations
         match user_profile.fitness_level {
