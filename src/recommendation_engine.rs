@@ -85,33 +85,31 @@ pub struct AdvancedRecommendationEngine<S: IntelligenceStrategy = DefaultStrateg
     user_profile: Option<UserFitnessProfile>,
 }
 
-impl Default for AdvancedRecommendationEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AdvancedRecommendationEngine {
-    /// Create a new recommendation engine with default strategy
+    /// Create a new recommendation engine using the default strategy and the
+    /// supplied intelligence configuration.
+    ///
+    /// The engine clones its `RecommendationEngineConfig` from the snapshot
+    /// and embeds the same snapshot inside a [`DefaultStrategy`] so the
+    /// strategy and the engine remain consistent.
     #[must_use]
-    pub fn new() -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn new(config: &IntelligenceConfig<true>) -> Self {
         Self {
-            strategy: DefaultStrategy,
-            config: global_config.recommendation_engine.clone(),
+            strategy: DefaultStrategy::new(config.clone()),
+            config: config.recommendation_engine.clone(),
             user_profile: None,
         }
     }
 }
 
 impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
-    /// Create a new recommendation engine with custom strategy
+    /// Create a new recommendation engine with a custom strategy and the
+    /// supplied intelligence configuration.
     #[must_use]
-    pub fn with_strategy(strategy: S) -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn with_strategy(strategy: S, config: &IntelligenceConfig<true>) -> Self {
         Self {
             strategy,
-            config: global_config.recommendation_engine.clone(),
+            config: config.recommendation_engine.clone(),
             user_profile: None,
         }
     }
@@ -126,13 +124,16 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
         }
     }
 
-    /// Create engine with user profile using default strategy
+    /// Create a recommendation engine seeded with a user profile using the
+    /// default strategy and the supplied intelligence configuration.
     #[must_use]
-    pub fn with_profile(profile: UserFitnessProfile) -> AdvancedRecommendationEngine {
-        let global_config = IntelligenceConfig::global();
+    pub fn with_profile(
+        profile: UserFitnessProfile,
+        config: &IntelligenceConfig<true>,
+    ) -> AdvancedRecommendationEngine {
         AdvancedRecommendationEngine {
-            strategy: DefaultStrategy,
-            config: global_config.recommendation_engine.clone(),
+            strategy: DefaultStrategy::new(config.clone()),
+            config: config.recommendation_engine.clone(),
             user_profile: Some(profile),
         }
     }

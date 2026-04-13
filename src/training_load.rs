@@ -86,13 +86,8 @@ impl TrainingLoadCalculator {
         resting_hr: Option<f64>,
         weight_kg: Option<f64>,
     ) -> Result<f64, IntelligenceError> {
-        let calculator = MetricsCalculator {
-            ftp,
-            lthr,
-            max_hr,
-            resting_hr,
-            weight_kg,
-        };
+        let calculator =
+            MetricsCalculator::new().with_user_data(ftp, lthr, max_hr, resting_hr, weight_kg);
 
         let metrics = calculator.calculate_metrics(activity).map_err(|e| {
             IntelligenceError::internal(format!("Failed to calculate metrics: {e}"))

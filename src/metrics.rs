@@ -7,7 +7,7 @@
 #![allow(clippy::cast_possible_truncation)] // Safe: controlled ranges for fitness metrics
 
 use crate::algorithms::{TrimpAlgorithm, TssAlgorithm};
-use crate::config::intelligence::IntelligenceConfig;
+use crate::config::intelligence::AlgorithmConfig;
 use crate::constants::physiology::{MAX_GOOD_GCT_MS, MIN_GOOD_GCT_MS, OPTIMAL_GCT_MS};
 use crate::constants::time_constants::SECONDS_PER_HOUR_F64;
 use crate::error::{IntelligenceError, IntelligenceResult};
@@ -98,6 +98,8 @@ pub struct MetricsCalculator {
     pub resting_hr: Option<f64>,
     /// User's weight in kg
     pub weight_kg: Option<f64>,
+    /// Algorithm configuration controlling TSS algorithm selection and fallback factors
+    pub algorithm_config: AlgorithmConfig,
 }
 
 impl Default for MetricsCalculator {
@@ -107,21 +109,28 @@ impl Default for MetricsCalculator {
 }
 
 impl MetricsCalculator {
-    /// Create a new metrics calculator
+    /// Create a new metrics calculator with default algorithm configuration.
+    ///
+    /// The calculator is usable as-is for power, HR, and pace-derived metrics
+    /// that do not depend on TSS configuration. Callers that compute TSS or
+    /// pace-fallback TSS should override the defaults via
+    /// [`Self::with_algorithm_config`] using a snapshot from the host
+    /// `IntelligenceConfig`.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             ftp: None,
             lthr: None,
             max_hr: None,
             resting_hr: None,
             weight_kg: None,
+            algorithm_config: AlgorithmConfig::default(),
         }
     }
 
     /// Set user parameters for calculations
     #[must_use]
-    pub const fn with_user_data(
+    pub fn with_user_data(
         mut self,
         ftp: Option<f64>,
         lthr: Option<f64>,
@@ -134,6 +143,14 @@ impl MetricsCalculator {
         self.max_hr = max_hr;
         self.resting_hr = resting_hr;
         self.weight_kg = weight_kg;
+        self
+    }
+
+    /// Override the algorithm configuration used for TSS computation and
+    /// pace-fallback TSS estimation.
+    #[must_use]
+    pub fn with_algorithm_config(mut self, algorithm_config: AlgorithmConfig) -> Self {
+        self.algorithm_config = algorithm_config;
         self
     }
 
@@ -216,14 +233,12 @@ impl MetricsCalculator {
 
         // 1. Try power-based TSS using configured algorithm (most accurate)
         if self.ftp.is_some() {
-            // Load algorithm configuration
-            let config = IntelligenceConfig::global();
-            let tss_algorithm = match config.algorithms.tss.parse::<TssAlgorithm>() {
+            let tss_algorithm = match self.algorithm_config.tss.parse::<TssAlgorithm>() {
                 Ok(algo) => algo,
                 Err(e) => {
                     warn!(
                         activity_id = activity.id(),
-                        tss_config = %config.algorithms.tss,
+                        tss_config = %self.algorithm_config.tss,
                         error = %e,
                         "Failed to parse TSS algorithm from config, using default"
                     );
@@ -252,7 +267,7 @@ impl MetricsCalculator {
         //    Each sport type defines its own moderate-effort pace (e.g., 10 min/km
         //    for running, 2 min/km for cycling). Using a single running baseline
         //    for cycling would inflate TSS ~5x because cyclists cover km much faster.
-        let fallback_config = &IntelligenceConfig::global().algorithms.tss_fallback;
+        let fallback_config = &self.algorithm_config.tss_fallback;
 
         if let Some(baseline_pace) = activity.sport_type().pace_baseline_s_per_km() {
             if let Some(distance_m) = activity.distance_meters() {

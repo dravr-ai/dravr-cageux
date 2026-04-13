@@ -108,33 +108,32 @@ pub struct AdvancedActivityAnalyzer {
     metrics_calculator: MetricsCalculator,
 }
 
-impl Default for AdvancedActivityAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AdvancedActivityAnalyzer {
-    /// Create a new activity analyzer
+    /// Create a new activity analyzer from the supplied intelligence configuration.
+    ///
+    /// Clones the activity-analyzer sub-config and seeds the embedded
+    /// `MetricsCalculator` with the algorithm configuration so TSS calculations
+    /// pick up the same threshold snapshot.
     #[must_use]
-    pub fn new() -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn new(config: &IntelligenceConfig<true>) -> Self {
         Self {
-            config: global_config.activity_analyzer.clone(),
-            metrics_calculator: MetricsCalculator::new(),
+            config: config.activity_analyzer.clone(),
+            metrics_calculator: MetricsCalculator::new()
+                .with_algorithm_config(config.algorithms.clone()),
         }
     }
 
     /// Create with custom configuration
     #[must_use]
-    pub const fn with_config(config: ActivityAnalyzerConfig) -> Self {
+    pub fn with_config(config: ActivityAnalyzerConfig) -> Self {
         Self {
             config,
             metrics_calculator: MetricsCalculator::new(),
         }
     }
 
-    /// Create analyzer with user-specific parameters
+    /// Create an analyzer with user-specific parameters and the supplied
+    /// intelligence configuration.
     #[must_use]
     pub fn with_user_data(
         ftp: Option<f64>,
@@ -142,12 +141,13 @@ impl AdvancedActivityAnalyzer {
         max_hr: Option<f64>,
         resting_hr: Option<f64>,
         weight_kg: Option<f64>,
+        config: &IntelligenceConfig<true>,
     ) -> Self {
-        let global_config = IntelligenceConfig::global();
         Self {
-            config: global_config.activity_analyzer.clone(),
+            config: config.activity_analyzer.clone(),
             metrics_calculator: MetricsCalculator::new()
-                .with_user_data(ftp, lthr, max_hr, resting_hr, weight_kg),
+                .with_user_data(ftp, lthr, max_hr, resting_hr, weight_kg)
+                .with_algorithm_config(config.algorithms.clone()),
         }
     }
 

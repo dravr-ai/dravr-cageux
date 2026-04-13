@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
-use crate::config::IntelligenceConfig;
+use crate::config::intelligence::NutritionConfig;
 
 // Re-export recipe model types from local models
 pub use crate::models::recipes::{
@@ -15,23 +15,32 @@ pub use crate::models::recipes::{
 /// Extension trait for `MacroTargets` that adds config-aware construction methods.
 ///
 /// This trait exists because `from_calories_and_timing` requires access to
-/// `IntelligenceConfig` (which lives in `pierre-intelligence`), while the
-/// `MacroTargets` type itself is defined in `pierre-core` to avoid a circular
-/// dependency between `pierre-database` and `pierre-intelligence`.
+/// nutrition configuration (which lives in `dravr-cageux`), while the
+/// `MacroTargets` type itself is defined alongside the recipe models to avoid
+/// a circular dependency.
 pub trait MacroTargetsExt {
-    /// Create targets from calorie goal and meal timing
+    /// Create targets from a calorie goal, meal timing, and an explicit
+    /// nutrition configuration snapshot.
     ///
-    /// Uses configurable macro distribution percentages from the global intelligence config.
-    /// Defaults are based on ISSN sports nutrition position stands.
-    fn from_calories_and_timing(calories: f64, timing: MealTiming) -> MacroTargets;
+    /// Defaults are based on ISSN sports nutrition position stands. Callers
+    /// pass the relevant slice of [`crate::config::intelligence::IntelligenceConfig`]
+    /// rather than reading from a global so the host process owns the
+    /// configuration lifecycle.
+    fn from_calories_and_timing(
+        calories: f64,
+        timing: MealTiming,
+        nutrition: &NutritionConfig,
+    ) -> MacroTargets;
 }
 
 impl MacroTargetsExt for MacroTargets {
-    fn from_calories_and_timing(calories: f64, timing: MealTiming) -> MacroTargets {
-        // Use configurable macro distribution from global config
-        let config = IntelligenceConfig::global();
+    fn from_calories_and_timing(
+        calories: f64,
+        timing: MealTiming,
+        nutrition: &NutritionConfig,
+    ) -> MacroTargets {
         let (protein_pct, carbs_pct, fat_pct) =
-            config.nutrition.meal_timing_macros.get_distribution(timing);
+            nutrition.meal_timing_macros.get_distribution(timing);
 
         Self::from_calories_and_distribution(calories, protein_pct, carbs_pct, fat_pct)
     }

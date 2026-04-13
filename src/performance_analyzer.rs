@@ -121,33 +121,30 @@ pub struct AdvancedPerformanceAnalyzer<S: IntelligenceStrategy = DefaultStrategy
     user_profile: Option<UserFitnessProfile>,
 }
 
-impl Default for AdvancedPerformanceAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AdvancedPerformanceAnalyzer {
-    /// Create a new performance analyzer with default strategy
+    /// Create a new performance analyzer using the default strategy and the
+    /// supplied intelligence configuration.
+    ///
+    /// The analyzer clones its `PerformanceAnalyzerConfig` from the snapshot
+    /// and embeds the same snapshot inside a [`DefaultStrategy`] so the
+    /// strategy and the analyzer remain consistent.
     #[must_use]
-    pub fn new() -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn new(config: &IntelligenceConfig<true>) -> Self {
         Self {
-            strategy: DefaultStrategy,
-            config: global_config.performance_analyzer.clone(),
+            strategy: DefaultStrategy::new(config.clone()),
+            config: config.performance_analyzer.clone(),
             user_profile: None,
         }
     }
 }
 
 impl<S: IntelligenceStrategy> AdvancedPerformanceAnalyzer<S> {
-    /// Create with custom strategy
+    /// Create with a custom strategy and the supplied intelligence configuration.
     #[must_use]
-    pub fn with_strategy(strategy: S) -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn with_strategy(strategy: S, config: &IntelligenceConfig<true>) -> Self {
         Self {
             strategy,
-            config: global_config.performance_analyzer.clone(),
+            config: config.performance_analyzer.clone(),
             user_profile: None,
         }
     }
@@ -162,13 +159,16 @@ impl<S: IntelligenceStrategy> AdvancedPerformanceAnalyzer<S> {
         }
     }
 
-    /// Create analyzer with user profile using default strategy
+    /// Create an analyzer seeded with a user profile using the default strategy
+    /// and the supplied intelligence configuration.
     #[must_use]
-    pub fn with_profile(profile: UserFitnessProfile) -> AdvancedPerformanceAnalyzer {
-        let global_config = IntelligenceConfig::global();
+    pub fn with_profile(
+        profile: UserFitnessProfile,
+        config: &IntelligenceConfig<true>,
+    ) -> AdvancedPerformanceAnalyzer {
         AdvancedPerformanceAnalyzer {
-            strategy: DefaultStrategy,
-            config: global_config.performance_analyzer.clone(),
+            strategy: DefaultStrategy::new(config.clone()),
+            config: config.performance_analyzer.clone(),
             user_profile: Some(profile),
         }
     }

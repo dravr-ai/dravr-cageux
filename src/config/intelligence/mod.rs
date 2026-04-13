@@ -83,11 +83,6 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use std::sync::OnceLock;
-use tracing::warn;
-
-/// Global configuration singleton
-static INTELLIGENCE_CONFIG: OnceLock<IntelligenceConfig<true>> = OnceLock::new();
 
 /// Main intelligence configuration container
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,21 +110,17 @@ pub struct IntelligenceConfig<const VALIDATED: bool = false> {
 }
 
 impl IntelligenceConfig<true> {
-    /// Get the global configuration instance
-    pub fn global() -> &'static Self {
-        INTELLIGENCE_CONFIG.get_or_init(|| {
-            Self::load().unwrap_or_else(|e| {
-                warn!("Failed to load intelligence config: {}, using defaults", e);
-                Self::default()
-            })
-        })
-    }
-
-    /// Load configuration from environment and files
+    /// Load configuration from defaults overlaid with environment variables.
+    ///
+    /// This is the canonical entry point for callers that want the layered
+    /// stack: compiled-in defaults → environment overrides → validation. For
+    /// hot-reloadable layered loads that also include a YAML overlay (e.g.
+    /// from a contremaitre sync), use [`Self::with_overlay`] instead.
     ///
     /// # Errors
     ///
-    /// Returns an error if environment variables contain invalid values or validation fails
+    /// Returns an error if environment variables contain invalid values or
+    /// validation fails.
     pub fn load() -> Result<Self, ConfigError> {
         let mut config = Self::default();
 
@@ -139,6 +130,54 @@ impl IntelligenceConfig<true> {
         // Validate the final configuration
         config.validate()?;
 
+        Ok(config)
+    }
+
+    /// Build a configuration from compiled-in defaults, environment overrides,
+    /// and a YAML overlay applied on top (in that order).
+    ///
+    /// The overlay is parsed as a partial `IntelligenceConfig` document — any
+    /// field present in the YAML replaces the corresponding default/env value.
+    /// This is the entry point used by the dravr-platform contremaitre sync
+    /// to install hot-reloadable threshold updates without restarting the
+    /// process.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if env parsing, YAML parsing, or validation fails.
+    pub fn with_overlay(yaml: &str) -> Result<Self, ConfigError> {
+        let base = Self::load()?;
+        let merged = merge_yaml_overlay(&base, yaml)?;
+        merged.validate()?;
+        Ok(merged)
+    }
+
+    /// Parse a fully-specified configuration from a YAML string and validate it.
+    ///
+    /// Unlike [`Self::with_overlay`], this constructor does not start from
+    /// defaults — the YAML must be a complete `IntelligenceConfig` document.
+    /// Use this when the source of truth is an external file rather than a
+    /// patch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the YAML cannot be deserialized or validation fails.
+    pub fn from_yaml_str(yaml: &str) -> Result<Self, ConfigError> {
+        let config: Self = serde_yaml::from_str(yaml)
+            .map_err(|e| ConfigError::Parse(format!("YAML deserialize: {e}")))?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Parse a fully-specified configuration from a JSON string and validate it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON cannot be deserialized or validation fails.
+    pub fn from_json_str(json: &str) -> Result<Self, ConfigError> {
+        let config: Self = serde_json::from_str(json)
+            .map_err(|e| ConfigError::Parse(format!("JSON deserialize: {e}")))?;
+        config.validate()?;
         Ok(config)
     }
 
@@ -731,22 +770,95 @@ impl IntelligenceStrategy for AggressiveStrategy {
     }
 }
 
-/// Default strategy using global configuration
+/// Default strategy carrying an injected intelligence configuration.
+///
+/// Mirrors the ownership pattern of [`ConservativeStrategy`] and
+/// [`AggressiveStrategy`]: the strategy holds an owned configuration snapshot
+/// and exposes references to its sub-structures via the [`IntelligenceStrategy`]
+/// trait. Construction requires an explicit configuration so that the host
+/// process owns the configuration lifecycle (e.g. for hot-reload via the
+/// dravr-platform contremaitre sync).
 #[derive(Debug, Clone)]
-pub struct DefaultStrategy;
+pub struct DefaultStrategy {
+    config: IntelligenceConfig<true>,
+}
+
+impl DefaultStrategy {
+    /// Construct a default strategy from an explicit configuration snapshot.
+    #[must_use]
+    pub const fn new(config: IntelligenceConfig<true>) -> Self {
+        Self { config }
+    }
+
+    /// Construct a default strategy from compiled-in defaults plus environment
+    /// variable overrides (the same layered stack as [`IntelligenceConfig::load`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if env parsing or validation fails.
+    pub fn from_env() -> Result<Self, ConfigError> {
+        Ok(Self::new(IntelligenceConfig::load()?))
+    }
+
+    /// Borrow the underlying configuration.
+    #[must_use]
+    pub const fn config(&self) -> &IntelligenceConfig<true> {
+        &self.config
+    }
+}
 
 impl IntelligenceStrategy for DefaultStrategy {
     fn recommendation_thresholds(&self) -> &RecommendationThresholds {
-        &IntelligenceConfig::global()
-            .recommendation_engine
-            .thresholds
+        &self.config.recommendation_engine.thresholds
     }
 
     fn performance_thresholds(&self) -> &PerformanceThresholds {
-        &IntelligenceConfig::global().performance_analyzer.thresholds
+        &self.config.performance_analyzer.thresholds
     }
 
     fn weather_config(&self) -> &WeatherAnalysisConfig {
-        &IntelligenceConfig::global().weather_analysis
+        &self.config.weather_analysis
+    }
+}
+
+/// Merge a YAML overlay document into a base configuration.
+///
+/// The overlay is parsed as a free-form `serde_yaml::Value`, deep-merged on
+/// top of the serialized base, and re-deserialized into the typed struct.
+/// This handles arbitrary nesting and partial documents without requiring a
+/// hand-rolled merge implementation per sub-config.
+fn merge_yaml_overlay(
+    base: &IntelligenceConfig<true>,
+    overlay_yaml: &str,
+) -> Result<IntelligenceConfig<true>, ConfigError> {
+    let mut base_value: serde_yaml::Value = serde_yaml::to_value(base)
+        .map_err(|e| ConfigError::Parse(format!("base serialize: {e}")))?;
+    let overlay_value: serde_yaml::Value = serde_yaml::from_str(overlay_yaml)
+        .map_err(|e| ConfigError::Parse(format!("overlay parse: {e}")))?;
+
+    deep_merge(&mut base_value, overlay_value);
+
+    serde_yaml::from_value(base_value)
+        .map_err(|e| ConfigError::Parse(format!("merged deserialize: {e}")))
+}
+
+/// Recursively merge `overlay` into `target`. Mappings are merged key by key;
+/// scalars and sequences in `overlay` replace whatever is at the same path in
+/// `target`. Null overlay values leave the target untouched.
+fn deep_merge(target: &mut serde_yaml::Value, overlay: serde_yaml::Value) {
+    match (target, overlay) {
+        (serde_yaml::Value::Mapping(target_map), serde_yaml::Value::Mapping(overlay_map)) => {
+            for (key, overlay_val) in overlay_map {
+                if let Some(target_val) = target_map.get_mut(&key) {
+                    deep_merge(target_val, overlay_val);
+                } else {
+                    target_map.insert(key, overlay_val);
+                }
+            }
+        }
+        (_, serde_yaml::Value::Null) => {}
+        (target_slot, overlay_val) => {
+            *target_slot = overlay_val;
+        }
     }
 }

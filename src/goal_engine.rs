@@ -73,33 +73,32 @@ pub struct AdvancedGoalEngine<S: IntelligenceStrategy = DefaultStrategy> {
     user_profile: Option<UserFitnessProfile>,
 }
 
-impl Default for AdvancedGoalEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AdvancedGoalEngine {
-    /// Create a new goal engine with default strategy
+    /// Create a new goal engine using the default strategy and the supplied
+    /// intelligence configuration.
+    ///
+    /// The engine clones its `GoalEngineConfig` from the snapshot and embeds
+    /// the same snapshot inside a [`DefaultStrategy`] so the strategy and the
+    /// engine remain consistent. Hot-reloadable callers should construct a new
+    /// engine when the upstream configuration changes rather than mutating an
+    /// existing instance.
     #[must_use]
-    pub fn new() -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn new(config: &IntelligenceConfig<true>) -> Self {
         Self {
-            strategy: DefaultStrategy,
-            config: global_config.goal_engine.clone(),
+            strategy: DefaultStrategy::new(config.clone()),
+            config: config.goal_engine.clone(),
             user_profile: None,
         }
     }
 }
 
 impl<S: IntelligenceStrategy> AdvancedGoalEngine<S> {
-    /// Create with custom strategy
+    /// Create with a custom strategy and the supplied intelligence configuration.
     #[must_use]
-    pub fn with_strategy(strategy: S) -> Self {
-        let global_config = IntelligenceConfig::global();
+    pub fn with_strategy(strategy: S, config: &IntelligenceConfig<true>) -> Self {
         Self {
             strategy,
-            config: global_config.goal_engine.clone(),
+            config: config.goal_engine.clone(),
             user_profile: None,
         }
     }
@@ -114,14 +113,16 @@ impl<S: IntelligenceStrategy> AdvancedGoalEngine<S> {
         }
     }
 
-    /// Create engine with user profile
-    /// Create goal engine with user profile using default strategy
+    /// Create a goal engine seeded with a user profile using the default
+    /// strategy and the supplied intelligence configuration.
     #[must_use]
-    pub fn with_profile(profile: UserFitnessProfile) -> AdvancedGoalEngine {
-        let global_config = IntelligenceConfig::global();
+    pub fn with_profile(
+        profile: UserFitnessProfile,
+        config: &IntelligenceConfig<true>,
+    ) -> AdvancedGoalEngine {
         AdvancedGoalEngine {
-            strategy: DefaultStrategy,
-            config: global_config.goal_engine.clone(),
+            strategy: DefaultStrategy::new(config.clone()),
+            config: config.goal_engine.clone(),
             user_profile: Some(profile),
         }
     }
