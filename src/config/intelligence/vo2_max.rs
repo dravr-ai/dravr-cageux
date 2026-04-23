@@ -163,9 +163,7 @@ impl VO2MaxCalculator {
         let addition = (reserve * percentage).round();
         // Safe: addition represents small heart rate increment (0-100 bpm)
         #[allow(clippy::cast_possible_truncation)]
-        u16::try_from(addition as i32)
-            .map(|add| base_hr.saturating_add(add))
-            .unwrap_or(base_hr)
+        u16::try_from(addition as i32).map_or(base_hr, |add| base_hr.saturating_add(add))
     }
     /// Create a new VO2 max calculator
     #[must_use]

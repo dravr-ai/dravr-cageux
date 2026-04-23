@@ -8,6 +8,7 @@ use crate::models::Activity;
 use crate::training_load::RiskLevel;
 use chrono::{Datelike, Timelike, Weekday};
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::collections::HashMap;
 
 /// Minimum activities needed for pattern detection
@@ -121,7 +122,7 @@ impl PatternDetector {
 
         // Sort days by frequency
         let mut day_freq_vec: Vec<(Weekday, u32)> = day_counts.into_iter().collect();
-        day_freq_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        day_freq_vec.sort_by_key(|b| Reverse(b.1));
 
         let most_common_days: Vec<Weekday> =
             day_freq_vec.iter().take(3).map(|(day, _)| *day).collect();
@@ -134,7 +135,7 @@ impl PatternDetector {
 
         // Sort hours by frequency
         let mut hour_freq_vec: Vec<(u32, u32)> = hour_counts.into_iter().collect();
-        hour_freq_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        hour_freq_vec.sort_by_key(|b| Reverse(b.1));
 
         let most_common_times: Vec<u32> = hour_freq_vec
             .iter()

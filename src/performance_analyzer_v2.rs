@@ -340,7 +340,7 @@ impl PerformanceAnalyzerV2 {
             .collect();
 
         // Sort by date
-        data_points.sort_by(|a, b| a.date.cmp(&b.date));
+        data_points.sort_by_key(|a| a.date);
         data_points
     }
 

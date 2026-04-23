@@ -400,7 +400,7 @@ impl PerformanceAnalyzerTrait for AdvancedPerformanceAnalyzer {
         }
 
         // Sort by date
-        data_points.sort_by(|a, b| a.date.cmp(&b.date));
+        data_points.sort_by_key(|a| a.date);
 
         // Apply smoothing
         Self::apply_smoothing(&mut data_points, 3);

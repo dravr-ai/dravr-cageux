@@ -18,6 +18,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -372,7 +373,7 @@ impl FriendActivityCache {
             .collect();
 
         // Sort by creation time, newest first
-        summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        summaries.sort_by_key(|b| Reverse(b.created_at));
 
         summaries
     }
@@ -401,7 +402,7 @@ impl FriendActivityCache {
             .collect();
 
         // Sort by creation time, newest first
-        all_summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        all_summaries.sort_by_key(|b| Reverse(b.created_at));
 
         // Limit results
         all_summaries.truncate(max_items);
