@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0] — 2026-04-24
+
+### Added
+
+- feat(activity): add Split + Lap types and Activity.splits/laps fields Detailed-endpoint providers (Strava, Garmin) return per-km/mi splits and athlete-triggered laps; cageux now models both with accessors and builder methods so downstream crates can surface per-lap HR/pace/power and split elevation deltas without bespoke JSON handling.
+
+### Fixed
+
+- fix: sidestep Rust 1.95 unnecessary_sort_by + map_unwrap_or lints sort_by_key(|b| Reverse(b.x)) for reverse ordering, map_or for Result::map().unwrap_or().
+
+
+
 ## [0.3.0] — 2026-04-13
 
 

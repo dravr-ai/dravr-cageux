@@ -23,7 +23,7 @@ Standalone Rust library for sports science analysis: VDOT, TSS, TRIMP, FTP, VO2m
 
 ```toml
 [dependencies]
-dravr-cageux = "0.3"
+dravr-cageux = "0.4"
 ```
 
 ```rust
