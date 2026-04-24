@@ -63,6 +63,80 @@ pub struct TimeSeriesData {
     pub gps_coordinates: Option<Vec<(f64, f64)>>,
 }
 
+/// Per-distance split from a detailed activity — typically 1 km or 1 mi
+/// segments the provider carves the activity into.
+///
+/// Populated from the detail endpoint (e.g. Strava `splits_metric`) when
+/// the activity has GPS or footpod distance tracking. Absent on indoor
+/// trainer sessions without distance.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Split {
+    /// 1-based split index along the activity timeline
+    pub index: u32,
+    /// Distance covered in this split (meters)
+    pub distance_meters: f64,
+    /// Elapsed time for the split (seconds) — includes stopped time
+    pub elapsed_time_seconds: u64,
+    /// Moving time for the split (seconds) — excludes stopped time
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moving_time_seconds: Option<u64>,
+    /// Elevation delta for this split (meters) — can be negative on descents
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elevation_difference_meters: Option<f64>,
+    /// Average speed during the split (meters/second)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_speed_mps: Option<f64>,
+    /// Average heart rate during the split (BPM)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_heart_rate: Option<u32>,
+    /// Pace zone classification (0-5 for running, provider-defined)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pace_zone: Option<u32>,
+}
+
+/// Provider-defined lap (manually triggered via watch button, or
+/// auto-detected intervals).
+///
+/// Differs from [`Split`] — splits are uniform distance buckets carved
+/// by the provider; laps are athlete-driven or interval-workout markers
+/// so they can vary wildly in length and pace.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Lap {
+    /// Provider-specific identifier (optional; Strava assigns u64s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// 1-based lap index along the activity timeline
+    pub index: u32,
+    /// Distance covered in this lap (meters)
+    pub distance_meters: f64,
+    /// Elapsed time for the lap (seconds) — includes stopped time
+    pub elapsed_time_seconds: u64,
+    /// Moving time for the lap (seconds) — excludes stopped time
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moving_time_seconds: Option<u64>,
+    /// Total elevation gain during the lap (meters)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elevation_gain_meters: Option<f64>,
+    /// Average speed during the lap (meters/second)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_speed_mps: Option<f64>,
+    /// Max speed reached during the lap (meters/second)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_speed_mps: Option<f64>,
+    /// Average heart rate during the lap (BPM)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_heart_rate: Option<u32>,
+    /// Max heart rate during the lap (BPM)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_heart_rate: Option<u32>,
+    /// Average cadence during the lap (rpm for cycling, spm for running)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_cadence: Option<u32>,
+    /// Average power output during the lap (watts)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_power: Option<u32>,
+}
+
 /// Segment effort within an activity (primarily from Strava)
 /// Represents performance on a known route/segment during an activity
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -298,6 +372,18 @@ pub struct Activity {
     /// Contains performance data for known segments/routes within the activity
     #[serde(skip_serializing_if = "Option::is_none")]
     segment_efforts: Option<Vec<SegmentEffort>>,
+
+    /// Per-distance splits (typically 1 km or 1 mi) from the provider's
+    /// detailed endpoint. Populated only on detail fetches; `None` for
+    /// list-endpoint fetches and for activities without distance tracking
+    /// (e.g. indoor trainer sessions).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    splits: Option<Vec<Split>>,
+
+    /// Provider-defined laps (athlete-triggered via watch button, or
+    /// auto-detected interval markers). Populated only on detail fetches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    laps: Option<Vec<Lap>>,
 
     /// Source provider of this activity data
     provider: String,
@@ -581,6 +667,22 @@ impl Activity {
         self.segment_efforts.as_ref()
     }
 
+    /// Returns the per-distance splits for this activity (from the
+    /// detailed endpoint). `None` when the activity was fetched from
+    /// the list endpoint or has no distance tracking.
+    #[must_use]
+    pub const fn splits(&self) -> Option<&Vec<Split>> {
+        self.splits.as_ref()
+    }
+
+    /// Returns the provider-defined laps for this activity (from the
+    /// detailed endpoint). `None` when the activity has no lap markers
+    /// or was fetched from the list endpoint.
+    #[must_use]
+    pub const fn laps(&self) -> Option<&Vec<Lap>> {
+        self.laps.as_ref()
+    }
+
     /// Returns the source provider of this activity data
     #[must_use]
     pub fn provider(&self) -> &str {
@@ -642,6 +744,8 @@ impl Default for Activity {
             workout_type: None,
             sport_type_detail: None,
             segment_efforts: None,
+            splits: None,
+            laps: None,
 
             provider: "test".into(),
         }
@@ -736,6 +840,8 @@ impl ActivityBuilder {
                 workout_type: None,
                 sport_type_detail: None,
                 segment_efforts: None,
+                splits: None,
+                laps: None,
             },
         }
     }
@@ -1311,6 +1417,35 @@ impl ActivityBuilder {
     #[must_use]
     pub fn segment_efforts_opt(mut self, value: Option<Vec<SegmentEffort>>) -> Self {
         self.activity.segment_efforts = value;
+        self
+    }
+
+    /// Sets the per-distance splits (typically 1 km / 1 mi) from a
+    /// detailed-endpoint fetch.
+    #[must_use]
+    pub fn splits(mut self, value: Vec<Split>) -> Self {
+        self.activity.splits = Some(value);
+        self
+    }
+
+    /// Sets the per-distance splits (optional).
+    #[must_use]
+    pub fn splits_opt(mut self, value: Option<Vec<Split>>) -> Self {
+        self.activity.splits = value;
+        self
+    }
+
+    /// Sets the provider-defined laps from a detailed-endpoint fetch.
+    #[must_use]
+    pub fn laps(mut self, value: Vec<Lap>) -> Self {
+        self.activity.laps = Some(value);
+        self
+    }
+
+    /// Sets the provider-defined laps (optional).
+    #[must_use]
+    pub fn laps_opt(mut self, value: Option<Vec<Lap>>) -> Self {
+        self.activity.laps = value;
         self
     }
 
