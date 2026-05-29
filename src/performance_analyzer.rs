@@ -514,8 +514,8 @@ impl PerformanceAnalyzerTrait for AdvancedPerformanceAnalyzer {
                     } else {
                         f64::from(u32::try_from(duration).unwrap_or(u32::MAX)) / 3600.0
                     };
-                    aerobic_score +=
-                        (f64::from(hr) - f64::from(RECOVERY_HR_THRESHOLD)) * duration_hours;
+                    aerobic_score = (f64::from(hr) - f64::from(RECOVERY_HR_THRESHOLD))
+                        .mul_add(duration_hours, aerobic_score);
                     aerobic_count += 1;
                 }
             }
@@ -544,7 +544,7 @@ impl PerformanceAnalyzerTrait for AdvancedPerformanceAnalyzer {
                     } else {
                         (f64::from(u32::try_from(duration).unwrap_or(u32::MAX)) / 3600.0).min(2.0)
                     };
-                    strength_score += f64::from(hr) * duration_weight;
+                    strength_score = f64::from(hr).mul_add(duration_weight, strength_score);
                     strength_count += 1;
                 } else if hr > MODERATE_HR_THRESHOLD {
                     // Moderate intensity also contributes, but less
@@ -553,7 +553,7 @@ impl PerformanceAnalyzerTrait for AdvancedPerformanceAnalyzer {
                     } else {
                         (f64::from(u32::try_from(duration).unwrap_or(u32::MAX)) / 3600.0).min(1.5)
                     };
-                    strength_score += (f64::from(hr) * 0.6) * duration_weight;
+                    strength_score = (f64::from(hr) * 0.6).mul_add(duration_weight, strength_score);
                     strength_count += 1;
                 }
             }

@@ -6,7 +6,8 @@
 
 //! VO2 max-based physiological calculations for personalized thresholds
 
-use crate::algorithms::{FtpAlgorithm, TrimpAlgorithm};
+use crate::algorithms::FtpAlgorithm;
+use crate::config::intelligence::{AlgorithmConfig, AlgorithmParamsConfig};
 use crate::models::SportType;
 use serde::{Deserialize, Serialize};
 
@@ -56,12 +57,6 @@ mod pace_zone_defaults {
     pub const VO2MAX_ZONE_PERCENTAGE: f64 = 0.95;
     /// Neuromuscular zone percentage
     pub const NEUROMUSCULAR_ZONE_PERCENTAGE: f64 = 1.05;
-}
-
-/// Power calculation defaults
-mod power_defaults {
-    /// Power coefficient for FTP estimation from `VO2max`
-    pub const POWER_COEFFICIENT: f64 = 13.5;
 }
 
 /// VO2 max-based physiological calculator
@@ -303,12 +298,16 @@ impl VO2MaxCalculator {
     }
 
     /// Calculate functional threshold power (FTP) from VO2 max
+    ///
+    /// The VO2max-based estimate is fixed to the [`FtpAlgorithm::FromVo2Max`]
+    /// method (it is all this calculator has data for); the power coefficient is
+    /// sourced from `params` so it can be tuned via config/env.
     #[must_use]
-    pub fn estimate_ftp(&self) -> f64 {
+    pub fn estimate_ftp(&self, params: &AlgorithmParamsConfig) -> f64 {
         // Use FtpAlgorithm enum for calculation
         let algorithm = FtpAlgorithm::FromVo2Max {
             vo2_max: self.vo2_max,
-            power_coefficient: power_defaults::POWER_COEFFICIENT,
+            power_coefficient: params.ftp_vo2max_power_coefficient,
         };
 
         // Unwrap is safe here: FromVo2Max never returns Err unless VO2max is invalid,
@@ -318,8 +317,12 @@ impl VO2MaxCalculator {
 
     /// Calculate personalized power zones for cycling
     #[must_use]
-    pub fn calculate_power_zones(&self, ftp: Option<f64>) -> PersonalizedPowerZones {
-        let ftp_value = ftp.unwrap_or_else(|| self.estimate_ftp());
+    pub fn calculate_power_zones(
+        &self,
+        ftp: Option<f64>,
+        params: &AlgorithmParamsConfig,
+    ) -> PersonalizedPowerZones {
+        let ftp_value = ftp.unwrap_or_else(|| self.estimate_ftp(params));
 
         PersonalizedPowerZones {
             zone1_range: (0.0 * ftp_value, 0.55 * ftp_value), // Active Recovery
@@ -348,10 +351,18 @@ impl VO2MaxCalculator {
     }
 
     /// Calculate training impulse (TRIMP) for an activity using enum-based algorithm selection
+    ///
+    /// The TRIMP variant is resolved from `config` (default `hybrid` auto-selects
+    /// the appropriate formula based on the supplied gender and HR data).
     #[must_use]
-    pub fn calculate_trimp(&self, avg_hr: u16, duration_minutes: f64, gender: &str) -> f64 {
-        // Use Hybrid algorithm which auto-selects appropriate formula based on gender
-        let algorithm = TrimpAlgorithm::Hybrid;
+    pub fn calculate_trimp(
+        &self,
+        avg_hr: u16,
+        duration_minutes: f64,
+        gender: &str,
+        config: &AlgorithmConfig,
+    ) -> f64 {
+        let algorithm = config.trimp_algorithm();
 
         algorithm
             .calculate(

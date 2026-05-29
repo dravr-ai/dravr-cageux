@@ -4,26 +4,27 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
+use crate::config::intelligence::AlgorithmConfig;
 use crate::error::IntelligenceError;
 use crate::metrics::MetricsCalculator;
 use crate::models::Activity;
-use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tracing::instrument;
 
-/// Standard CTL (Chronic Training Load) window - 42 days for long-term fitness
-const CTL_WINDOW_DAYS: i64 = 42;
-
-/// Standard ATL (Acute Training Load) window - 7 days for short-term fatigue
-const ATL_WINDOW_DAYS: i64 = 7;
+/// TSS data point with timestamp — re-exported canonical type from the
+/// algorithm layer so the training-load calculator and the
+/// [`TrainingLoadAlgorithm`](crate::algorithms::TrainingLoadAlgorithm) enum
+/// share a single definition.
+pub use crate::algorithms::training_load::TssDataPoint;
 
 /// Training load metrics for an athlete
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingLoad {
-    /// Chronic Training Load (42-day exponential moving average) - represents fitness
+    /// Chronic Training Load (long-term smoothed TSS) - represents fitness.
+    /// The smoothing method and window come from the configured training-load algorithm.
     pub ctl: f64,
-    /// Acute Training Load (7-day exponential moving average) - represents fatigue
+    /// Acute Training Load (short-term smoothed TSS) - represents fatigue.
+    /// The smoothing method and window come from the configured training-load algorithm.
     pub atl: f64,
     /// Training Stress Balance (CTL - ATL) - represents form/freshness
     pub tsb: f64,
@@ -31,19 +32,14 @@ pub struct TrainingLoad {
     pub tss_history: Vec<TssDataPoint>,
 }
 
-/// TSS data point with timestamp
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TssDataPoint {
-    /// Date of the training session
-    pub date: DateTime<Utc>,
-    /// Training Stress Score for this session
-    pub tss: f64,
-}
-
-/// Calculator for training load metrics
+/// Calculator for training load metrics.
+///
+/// Holds an [`AlgorithmConfig`] so it can resolve the configured training-load
+/// smoothing algorithm (EMA/SMA/WMA/Kalman + CTL/ATL windows) via
+/// [`AlgorithmConfig::training_load_algorithm`], and so the per-activity TSS it
+/// computes honors the configured TSS algorithm too.
 pub struct TrainingLoadCalculator {
-    ctl_window_days: i64,
-    atl_window_days: i64,
+    algorithm_config: AlgorithmConfig,
 }
 
 impl Default for TrainingLoadCalculator {
@@ -53,22 +49,23 @@ impl Default for TrainingLoadCalculator {
 }
 
 impl TrainingLoadCalculator {
-    /// Create a new training load calculator with standard windows
+    /// Create a new training load calculator using default algorithm configuration
+    /// (EMA with 42-day CTL / 7-day ATL windows).
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            ctl_window_days: CTL_WINDOW_DAYS,
-            atl_window_days: ATL_WINDOW_DAYS,
+            algorithm_config: AlgorithmConfig::default(),
         }
     }
 
-    /// Create a training load calculator with custom window sizes
+    /// Create a training load calculator from an explicit algorithm configuration.
+    ///
+    /// The configured training-load variant and its CTL/ATL/Kalman parameters,
+    /// as well as the TSS algorithm used for per-activity scoring, are sourced
+    /// from `algorithm_config`.
     #[must_use]
-    pub const fn with_windows(ctl_days: i64, atl_days: i64) -> Self {
-        Self {
-            ctl_window_days: ctl_days,
-            atl_window_days: atl_days,
-        }
+    pub fn from_config(algorithm_config: AlgorithmConfig) -> Self {
+        Self { algorithm_config }
     }
 
     /// Calculate TSS for a single activity using existing `MetricsCalculator`
@@ -86,8 +83,9 @@ impl TrainingLoadCalculator {
         resting_hr: Option<f64>,
         weight_kg: Option<f64>,
     ) -> Result<f64, IntelligenceError> {
-        let calculator =
-            MetricsCalculator::new().with_user_data(ftp, lthr, max_hr, resting_hr, weight_kg);
+        let calculator = MetricsCalculator::new()
+            .with_user_data(ftp, lthr, max_hr, resting_hr, weight_kg)
+            .with_algorithm_config(self.algorithm_config.clone());
 
         let metrics = calculator.calculate_metrics(activity).map_err(|e| {
             IntelligenceError::internal(format!("Failed to calculate metrics: {e}"))
@@ -188,10 +186,12 @@ impl TrainingLoadCalculator {
             });
         }
 
-        // Calculate CTL and ATL using exponential moving average
-        let ctl = Self::calculate_ema(&tss_data, self.ctl_window_days);
-        let atl = Self::calculate_ema(&tss_data, self.atl_window_days);
-        let tsb = ctl - atl;
+        // Resolve the configured training-load algorithm (default EMA 42/7) and
+        // dispatch CTL/ATL through the single canonical implementation.
+        let algorithm = self.algorithm_config.training_load_algorithm();
+        let ctl = algorithm.calculate_ctl(&tss_data)?;
+        let atl = algorithm.calculate_atl(&tss_data)?;
+        let tsb = Self::calculate_tsb(ctl, atl);
 
         Ok(TrainingLoad {
             ctl,
@@ -247,49 +247,6 @@ impl TrainingLoadCalculator {
     #[must_use]
     pub const fn calculate_tsb(ctl: f64, atl: f64) -> f64 {
         ctl - atl
-    }
-
-    /// Calculate exponential moving average for TSS values
-    ///
-    /// EMA formula: `EMA_today` = (`TSS_today` x α) + (`EMA_yesterday` x (1 - α))
-    /// where α = 2 / (N + 1) and N is the window size in days
-    fn calculate_ema(tss_data: &[TssDataPoint], window_days: i64) -> f64 {
-        if tss_data.is_empty() {
-            return 0.0;
-        }
-
-        // Calculate smoothing factor: α = 2 / (N + 1)
-        #[allow(clippy::cast_precision_loss)]
-        let alpha = 2.0 / (window_days as f64 + 1.0);
-
-        // Fill in missing days with zero TSS to create continuous time series
-        let first_date = tss_data[0].date;
-        let last_date = tss_data[tss_data.len() - 1].date;
-
-        let days_span = (last_date - first_date).num_days();
-        if days_span < 0 {
-            return 0.0;
-        }
-
-        // Create a map of date -> TSS for quick lookup
-        let mut tss_map = HashMap::new();
-        for point in tss_data {
-            let date_key = point.date.date_naive();
-            *tss_map.entry(date_key).or_insert(0.0) += point.tss;
-        }
-
-        // Calculate EMA day by day
-        let mut ema = 0.0;
-        for day_offset in 0..=days_span {
-            let current_date = first_date + Duration::days(day_offset);
-            let date_key = current_date.date_naive();
-            let daily_tss = tss_map.get(&date_key).copied().unwrap_or(0.0);
-
-            // Apply EMA formula
-            ema = daily_tss.mul_add(alpha, ema * (1.0 - alpha));
-        }
-
-        ema
     }
 
     /// Interpret TSB value and provide status

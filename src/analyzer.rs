@@ -159,7 +159,7 @@ impl ActivityAnalyzer {
             // Convert to f32, safely handling potential precision loss
             safe_u32_to_f32(duration_u32)
         };
-        effort += (duration_f32 / 3600.0) * EFFORT_HOUR_FACTOR; // Duration-based effort
+        effort = (duration_f32 / 3600.0).mul_add(EFFORT_HOUR_FACTOR, effort); // Duration-based effort
 
         // Heart rate intensity
         if let (Some(avg_hr), Some(max_hr)) =
@@ -172,7 +172,7 @@ impl ActivityAnalyzer {
                         / f32::from(
                             u16::try_from(max_hr.min(u32::from(u16::MAX))).unwrap_or(u16::MAX),
                         );
-                effort += hr_intensity * HR_INTENSITY_EFFORT_FACTOR;
+                effort = hr_intensity.mul_add(HR_INTENSITY_EFFORT_FACTOR, effort);
             }
         }
 
@@ -201,7 +201,7 @@ impl ActivityAnalyzer {
         // Elevation factor
         if let Some(elevation) = activity.elevation_gain() {
             let elevation_factor = safe_f64_to_f32(elevation / f64::from(ELEVATION_EFFORT_DIVISOR));
-            effort += elevation_factor * ELEVATION_EFFORT_FACTOR;
+            effort = elevation_factor.mul_add(ELEVATION_EFFORT_FACTOR, effort);
         }
 
         effort.clamp(MIN_EFFORT_SCORE, MAX_EFFORT_SCORE)
@@ -331,7 +331,7 @@ impl ActivityAnalyzer {
                         / (f32::from(
                             u16::try_from(avg_hr.min(u32::from(u16::MAX))).unwrap_or(u16::MAX),
                         ) * pace_per_km);
-                    efficiency += hr_efficiency * HR_EFFICIENCY_MULTIPLIER;
+                    efficiency = hr_efficiency.mul_add(HR_EFFICIENCY_MULTIPLIER, efficiency);
                 }
             }
         }

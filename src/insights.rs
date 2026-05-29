@@ -291,7 +291,8 @@ impl InsightGenerator {
             safe_f64_to_f32(f64::from(duration_u32))
         };
         {
-            effort_score += (duration_f32 / 3600.0) * (safe_f64_to_f32(COMPLETION_BONUS) * 2.0);
+            effort_score = (duration_f32 / 3600.0)
+                .mul_add(safe_f64_to_f32(COMPLETION_BONUS) * 2.0, effort_score);
             // +2 per hour
         }
 
@@ -303,7 +304,8 @@ impl InsightGenerator {
                 // Heart rates are small values (30-220), use safe conversion
                 let hr_intensity =
                     f32::from(safe_u32_to_u16(avg_hr)) / f32::from(safe_u32_to_u16(max_hr));
-                effort_score += hr_intensity * safe_f64_to_f32(BASE_ACTIVITY_SCORE);
+                effort_score =
+                    hr_intensity.mul_add(safe_f64_to_f32(BASE_ACTIVITY_SCORE), effort_score);
             }
         }
 

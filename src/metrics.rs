@@ -6,7 +6,6 @@
 //! Advanced fitness metrics calculation and analysis
 #![allow(clippy::cast_possible_truncation)] // Safe: controlled ranges for fitness metrics
 
-use crate::algorithms::{TrimpAlgorithm, TssAlgorithm};
 use crate::config::intelligence::AlgorithmConfig;
 use crate::constants::physiology::{MAX_GOOD_GCT_MS, MIN_GOOD_GCT_MS, OPTIMAL_GCT_MS};
 use crate::constants::time_constants::SECONDS_PER_HOUR_F64;
@@ -23,7 +22,7 @@ use crate::physiological_constants::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Safe casting helper functions to avoid clippy warnings
 #[inline]
@@ -233,18 +232,8 @@ impl MetricsCalculator {
 
         // 1. Try power-based TSS using configured algorithm (most accurate)
         if self.ftp.is_some() {
-            let tss_algorithm = match self.algorithm_config.tss.parse::<TssAlgorithm>() {
-                Ok(algo) => algo,
-                Err(e) => {
-                    warn!(
-                        activity_id = activity.id(),
-                        tss_config = %self.algorithm_config.tss,
-                        error = %e,
-                        "Failed to parse TSS algorithm from config, using default"
-                    );
-                    TssAlgorithm::default()
-                }
-            };
+            // Resolver injects the configured rolling window and warns on bad config
+            let tss_algorithm = self.algorithm_config.tss_algorithm();
 
             // Use enum-dispatched TSS calculation
             if let Ok(tss) =
@@ -468,8 +457,8 @@ impl MetricsCalculator {
         let resting_hr_u32 = self.resting_hr.map(|hr| hr as u32)?;
         let duration_minutes = f64::from(duration_seconds) / 60.0;
 
-        // Use Hybrid algorithm (auto-selects best method based on available data)
-        let algorithm = TrimpAlgorithm::Hybrid;
+        // Resolve the configured TRIMP algorithm (default Hybrid auto-selects per data)
+        let algorithm = self.algorithm_config.trimp_algorithm();
 
         algorithm
             .calculate(

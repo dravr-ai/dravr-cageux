@@ -337,7 +337,7 @@ impl PatternDetector {
         let total_activities_f64 = total_activities as f64;
         for (_, count) in day_freq {
             let prob = f64::from(*count) / total_activities_f64;
-            consistency += prob * prob; // Concentration measure
+            consistency = prob.mul_add(prob, consistency); // Concentration measure
         }
 
         // Scale to 0-100 (higher = more consistent)

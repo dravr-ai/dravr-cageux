@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
-use crate::algorithms::VdotAlgorithm;
+use crate::config::intelligence::{AlgorithmConfig, AlgorithmParamsConfig};
 use crate::error::IntelligenceError;
 use crate::models::Activity;
 use serde::{Deserialize, Serialize};
@@ -17,9 +17,6 @@ const DISTANCE_10K: f64 = 10_000.0;
 const DISTANCE_15K: f64 = 15_000.0;
 const DISTANCE_HALF_MARATHON: f64 = 21_097.5;
 const DISTANCE_MARATHON: f64 = 42_195.0;
-
-/// Riegel formula exponent (typical value for running)
-const RIEGEL_EXPONENT: f64 = 1.06;
 
 /// Race predictions for standard distances
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,12 +37,13 @@ pub struct PerformancePredictor;
 impl PerformancePredictor {
     /// Calculate VDOT from race performance
     ///
-    /// VDOT is Jack Daniels' VO2 max adjusted for running economy
-    /// Delegates to `VdotAlgorithm::Daniels` for the calculation
+    /// VDOT is Jack Daniels' VO2 max adjusted for running economy.
+    /// The VDOT variant is resolved from `config` (default `daniels`).
     ///
     /// # Arguments
     /// * `distance_meters` - Race distance in meters
     /// * `time_seconds` - Race time in seconds
+    /// * `config` - Algorithm configuration selecting the VDOT variant
     ///
     /// # Returns
     /// VDOT value (typically 30-85 for recreational to elite runners)
@@ -55,18 +53,22 @@ impl PerformancePredictor {
     pub fn calculate_vdot(
         distance_meters: f64,
         time_seconds: f64,
+        config: &AlgorithmConfig,
     ) -> Result<f64, IntelligenceError> {
-        VdotAlgorithm::Daniels.calculate_vdot(distance_meters, time_seconds)
+        config
+            .vdot_algorithm()
+            .calculate_vdot(distance_meters, time_seconds)
     }
 
-    /// Predict race time using VDOT tables
+    /// Predict race time from a VDOT value.
     ///
-    /// Uses Jack Daniels' VDOT training paces
-    /// Delegates to `VdotAlgorithm::Daniels` for the calculation
+    /// The VDOT variant is resolved from `config` (default `daniels` VDOT tables;
+    /// `riegel` applies the configured power-law exponent).
     ///
     /// # Arguments
     /// * `vdot` - VDOT value
     /// * `target_distance_meters` - Target race distance
+    /// * `config` - Algorithm configuration selecting the VDOT variant
     ///
     /// # Returns
     /// Predicted race time in seconds
@@ -76,21 +78,26 @@ impl PerformancePredictor {
     pub fn predict_time_vdot(
         vdot: f64,
         target_distance_meters: f64,
+        config: &AlgorithmConfig,
     ) -> Result<f64, IntelligenceError> {
-        VdotAlgorithm::Daniels.predict_time(vdot, target_distance_meters)
+        config
+            .vdot_algorithm()
+            .predict_time(vdot, target_distance_meters)
     }
 
-    /// Predict race time using Riegel formula
+    /// Predict race time directly from a known performance using Riegel's power law.
     ///
-    /// Riegel's formula: Time2 = Time1 x (Distance2 / Distance1)^1.06
+    /// Riegel's formula: `Time2 = Time1 x (Distance2 / Distance1)^exponent`
     ///
     /// This is a simpler alternative to VDOT that works reasonably well
-    /// for predicting times at different distances
+    /// for predicting times at different distances. The exponent is sourced
+    /// from `params` (default 1.06) so it can be tuned via config/env.
     ///
     /// # Arguments
     /// * `known_distance` - Distance of known race in meters
     /// * `known_time` - Time of known race in seconds
     /// * `target_distance` - Target race distance in meters
+    /// * `params` - Algorithm tuning parameters supplying the Riegel exponent
     ///
     /// # Errors
     /// Returns `IntelligenceError::InvalidInput` if any distance or time is non-positive
@@ -98,6 +105,7 @@ impl PerformancePredictor {
         known_distance: f64,
         known_time: f64,
         target_distance: f64,
+        params: &AlgorithmParamsConfig,
     ) -> Result<f64, IntelligenceError> {
         if known_distance <= 0.0 || known_time <= 0.0 || target_distance <= 0.0 {
             return Err(IntelligenceError::invalid_input(
@@ -106,7 +114,7 @@ impl PerformancePredictor {
         }
 
         let distance_ratio = target_distance / known_distance;
-        let predicted_time = known_time * distance_ratio.powf(RIEGEL_EXPONENT);
+        let predicted_time = known_time * distance_ratio.powf(params.vdot_riegel_exponent);
 
         Ok(predicted_time)
     }
@@ -120,8 +128,9 @@ impl PerformancePredictor {
     pub fn generate_race_predictions(
         distance_meters: f64,
         time_seconds: f64,
+        config: &AlgorithmConfig,
     ) -> Result<RacePredictions, IntelligenceError> {
-        let vdot = Self::calculate_vdot(distance_meters, time_seconds)?;
+        let vdot = Self::calculate_vdot(distance_meters, time_seconds, config)?;
 
         let mut predictions = HashMap::new();
 
@@ -135,7 +144,7 @@ impl PerformancePredictor {
         ];
 
         for (name, distance) in distances {
-            if let Ok(predicted_time) = Self::predict_time_vdot(vdot, distance) {
+            if let Ok(predicted_time) = Self::predict_time_vdot(vdot, distance, config) {
                 predictions.insert(name.to_owned(), predicted_time);
             }
         }
@@ -154,6 +163,7 @@ impl PerformancePredictor {
     /// Returns `IntelligenceError::InvalidInput` if activity lacks distance or duration data
     pub fn generate_predictions_from_activity(
         activity: &Activity,
+        config: &AlgorithmConfig,
     ) -> Result<RacePredictions, IntelligenceError> {
         let distance = activity.distance_meters().ok_or_else(|| {
             IntelligenceError::invalid_input("Activity must have distance".to_owned())
@@ -163,7 +173,7 @@ impl PerformancePredictor {
 
         #[allow(clippy::cast_precision_loss)]
         let duration_f64 = duration as f64;
-        Self::generate_race_predictions(distance, duration_f64)
+        Self::generate_race_predictions(distance, duration_f64, config)
     }
 
     /// Find best performance from activities for race prediction

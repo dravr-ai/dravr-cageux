@@ -45,7 +45,7 @@ pub use activity::{
     ActivityAnalysisConfig, ActivityAnalyzerConfig, ActivityInsightsConfig, ActivityScoringConfig,
     HeartRateZonesConfig, PowerZonesConfig, SeverityThresholds,
 };
-pub use algorithms::{AlgorithmConfig, TssFallbackConfig};
+pub use algorithms::{AlgorithmConfig, AlgorithmParamsConfig, TssFallbackConfig};
 pub use error::ConfigError;
 pub use goals::{
     DifficultyDistribution, FeasibilityConfig, GoalEngineConfig, ProgressionConfig,
@@ -608,6 +608,53 @@ impl IntelligenceConfig<true> {
         // Algorithm selection overrides
         Self::apply_env_var("PIERRE_TSS_ALGORITHM", &mut self.algorithms.tss)?;
         Self::apply_env_var("PIERRE_MAXHR_ALGORITHM", &mut self.algorithms.maxhr)?;
+        Self::apply_env_var("PIERRE_FTP_ALGORITHM", &mut self.algorithms.ftp)?;
+        Self::apply_env_var("PIERRE_LTHR_ALGORITHM", &mut self.algorithms.lthr)?;
+        Self::apply_env_var("PIERRE_VO2MAX_ALGORITHM", &mut self.algorithms.vo2max)?;
+        Self::apply_env_var("PIERRE_TRIMP_ALGORITHM", &mut self.algorithms.trimp)?;
+        Self::apply_env_var("PIERRE_VDOT_ALGORITHM", &mut self.algorithms.vdot)?;
+        Self::apply_env_var(
+            "PIERRE_TRAINING_LOAD_ALGORITHM",
+            &mut self.algorithms.training_load,
+        )?;
+        Self::apply_env_var("PIERRE_RECOVERY_ALGORITHM", &mut self.algorithms.recovery)?;
+
+        // Algorithm tuning-parameter overrides
+        Self::apply_env_var(
+            "INTELLIGENCE_TSS_WINDOW_SECONDS",
+            &mut self.algorithms.params.tss_window_seconds,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_VDOT_RIEGEL_EXPONENT",
+            &mut self.algorithms.params.vdot_riegel_exponent,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TRAINING_LOAD_CTL_DAYS",
+            &mut self.algorithms.params.training_load_ctl_days,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TRAINING_LOAD_ATL_DAYS",
+            &mut self.algorithms.params.training_load_atl_days,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TRAINING_LOAD_KALMAN_PROCESS_NOISE",
+            &mut self.algorithms.params.training_load_kalman_process_noise,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_TRAINING_LOAD_KALMAN_MEASUREMENT_NOISE",
+            &mut self
+                .algorithms
+                .params
+                .training_load_kalman_measurement_noise,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_FTP_VO2MAX_POWER_COEFFICIENT",
+            &mut self.algorithms.params.ftp_vo2max_power_coefficient,
+        )?;
+        Self::apply_env_var(
+            "INTELLIGENCE_LTHR_MAXHR_PERCENTAGE",
+            &mut self.algorithms.params.lthr_maxhr_percentage,
+        )?;
 
         // TSS fallback configuration overrides
         Self::apply_env_var(

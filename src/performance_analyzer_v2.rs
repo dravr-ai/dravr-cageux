@@ -484,8 +484,8 @@ impl PerformanceAnalyzerV2 {
                     && duration_seconds >= self.config.performance.min_aerobic_duration_seconds
                 {
                     let duration_hours = duration_seconds as f64 / 3600.0;
-                    aerobic_score +=
-                        (f64::from(hr) - f64::from(recovery_threshold)) * duration_hours;
+                    aerobic_score = (f64::from(hr) - f64::from(recovery_threshold))
+                        .mul_add(duration_hours, aerobic_score);
                     count += 1;
                 }
             }
@@ -509,7 +509,7 @@ impl PerformanceAnalyzerV2 {
             if let Some(hr) = activity.average_heart_rate() {
                 if hr > high_intensity_threshold {
                     let duration_hours = activity.duration_seconds() as f64 / 3600.0;
-                    strength_score += f64::from(hr) * duration_hours.min(2.0); // Cap contribution
+                    strength_score = f64::from(hr).mul_add(duration_hours.min(2.0), strength_score); // Cap contribution
                     count += 1;
                 }
             }
