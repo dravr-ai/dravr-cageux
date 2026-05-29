@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0] — 2026-05-29
+
+### Added
+
+- feat(algorithms): make all 9 algorithms config/env-selectable with tunable params Adds selection fields + AlgorithmParamsConfig + resolvers, wires every consumption site, unifies the duplicate training-load EMA/TssDataPoint into TrainingLoadAlgorithm, and fixes pre-existing suboptimal_flops nursery lints.
+
+
+
 ## [0.4.0] — 2026-04-24
 
 ### Added
