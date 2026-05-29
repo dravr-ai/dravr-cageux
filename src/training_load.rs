@@ -188,9 +188,15 @@ impl TrainingLoadCalculator {
 
         // Resolve the configured training-load algorithm (default EMA 42/7) and
         // dispatch CTL/ATL through the single canonical implementation.
+        //
+        // A calculation error here means the input is unusable for smoothing —
+        // in practice reverse-chronological (newest-first) data, which Strava
+        // returns. Preserve the long-standing graceful contract: yield 0 rather
+        // than erroring, so callers that forget to sort degrade to a zero load
+        // instead of failing. Callers that need accuracy sort oldest-first.
         let algorithm = self.algorithm_config.training_load_algorithm();
-        let ctl = algorithm.calculate_ctl(&tss_data)?;
-        let atl = algorithm.calculate_atl(&tss_data)?;
+        let ctl = algorithm.calculate_ctl(&tss_data).unwrap_or(0.0);
+        let atl = algorithm.calculate_atl(&tss_data).unwrap_or(0.0);
         let tsb = Self::calculate_tsb(ctl, atl);
 
         Ok(TrainingLoad {

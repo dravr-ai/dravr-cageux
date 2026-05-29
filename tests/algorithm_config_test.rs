@@ -10,7 +10,7 @@ use dravr_cageux::algorithms::{
     VdotAlgorithm,
 };
 use dravr_cageux::config::intelligence::{AlgorithmConfig, AlgorithmParamsConfig};
-use dravr_cageux::models::MaxHrAlgorithm;
+use dravr_cageux::models::{ActivityBuilder, MaxHrAlgorithm, SportType};
 use dravr_cageux::training_load::{TrainingLoadCalculator, TssDataPoint};
 
 // ============================================================================
@@ -303,5 +303,51 @@ fn sma_and_ema_selections_differ() {
     assert!(
         sma > ema && (sma - ema).abs() > 1.0,
         "EMA ({ema}) should trail SMA ({sma}) on a finite series"
+    );
+}
+
+#[test]
+fn calculate_training_load_reverse_chronological_yields_zero() {
+    // Regression: newest-first activities (as Strava returns) must degrade to a
+    // zero training load rather than erroring. The training-load algorithm errors
+    // on unsorted dates; TrainingLoadCalculator absorbs that into a graceful 0.
+    let now = Utc::now();
+    let activities: Vec<_> = (0..3)
+        .map(|i| {
+            ActivityBuilder::new(
+                format!("a{i}"),
+                format!("run {i}"),
+                SportType::Run,
+                now - Duration::days(i), // index 0 = newest → reverse-chronological
+                3600,
+                "synthetic",
+            )
+            .distance_meters(10_000.0)
+            .average_heart_rate(150)
+            .build()
+        })
+        .collect();
+
+    let calculator = TrainingLoadCalculator::new();
+    let result = calculator
+        .calculate_training_load(
+            &activities,
+            Some(250.0),
+            Some(160.0),
+            Some(190.0),
+            Some(50.0),
+            Some(70.0),
+        )
+        .expect("reverse-chronological input must not error");
+
+    assert!(
+        result.ctl.abs() < f64::EPSILON,
+        "CTL should be 0 for newest-first (unsorted) activities, got {}",
+        result.ctl
+    );
+    assert!(
+        result.atl.abs() < f64::EPSILON,
+        "ATL should be 0, got {}",
+        result.atl
     );
 }
