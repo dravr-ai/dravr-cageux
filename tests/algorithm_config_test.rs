@@ -307,10 +307,11 @@ fn sma_and_ema_selections_differ() {
 }
 
 #[test]
-fn calculate_training_load_reverse_chronological_yields_zero() {
-    // Regression: newest-first activities (as Strava returns) must degrade to a
-    // zero training load rather than erroring. The training-load algorithm errors
-    // on unsorted dates; TrainingLoadCalculator absorbs that into a graceful 0.
+fn calculate_training_load_reverse_chronological_is_rejected() {
+    // Regression (Issue #1, fail-loud): newest-first activities (as Strava
+    // returns) are unsorted, so the training-load algorithm rejects them.
+    // TrainingLoadCalculator propagates that error rather than silently zeroing,
+    // so a caller that forgot to sort oldest-first finds out.
     let now = Utc::now();
     let activities: Vec<_> = (0..3)
         .map(|i| {
@@ -329,25 +330,17 @@ fn calculate_training_load_reverse_chronological_yields_zero() {
         .collect();
 
     let calculator = TrainingLoadCalculator::new();
-    let result = calculator
-        .calculate_training_load(
-            &activities,
-            Some(250.0),
-            Some(160.0),
-            Some(190.0),
-            Some(50.0),
-            Some(70.0),
-        )
-        .expect("reverse-chronological input must not error");
+    let result = calculator.calculate_training_load(
+        &activities,
+        Some(250.0),
+        Some(160.0),
+        Some(190.0),
+        Some(50.0),
+        Some(70.0),
+    );
 
     assert!(
-        result.ctl.abs() < f64::EPSILON,
-        "CTL should be 0 for newest-first (unsorted) activities, got {}",
-        result.ctl
-    );
-    assert!(
-        result.atl.abs() < f64::EPSILON,
-        "ATL should be 0, got {}",
-        result.atl
+        result.is_err(),
+        "reverse-chronological (unsorted) activities must be rejected, not silently zeroed"
     );
 }
