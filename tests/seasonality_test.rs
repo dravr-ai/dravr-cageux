@@ -4,6 +4,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::str_to_string
+)]
+
 use dravr_cageux::models::SportType;
 use dravr_cageux::seasonality::{
     build_seasonal_context, hemisphere_from_latitude, recommended_sports_for_season,

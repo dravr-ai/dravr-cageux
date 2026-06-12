@@ -4,6 +4,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::str_to_string
+)]
+
 use dravr_cageux::algorithms::ftp::FtpAlgorithm;
 use dravr_cageux::algorithms::lthr::LthrAlgorithm;
 use dravr_cageux::algorithms::trimp::TrimpAlgorithm;
