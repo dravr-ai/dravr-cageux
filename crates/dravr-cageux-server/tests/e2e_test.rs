@@ -17,7 +17,6 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
-use tokio::sync::RwLock;
 use tower::ServiceExt;
 
 use dravr_cageux_mcp::state::ServerState;
@@ -25,7 +24,7 @@ use dravr_cageux_mcp::{build_tool_registry, McpServer};
 use dravr_cageux_server::router::build_router;
 
 fn create_test_app() -> axum::Router {
-    let state = Arc::new(RwLock::new(ServerState::new()));
+    let state = Arc::new(ServerState::new());
     let tools = build_tool_registry();
     let mcp_server = Arc::new(McpServer::new(
         "dravr-cageux",

@@ -9,7 +9,6 @@ use std::process;
 use std::sync::Arc;
 
 use clap::Parser;
-use tokio::sync::RwLock;
 use tracing::info;
 
 use dravr_cageux_mcp::state::ServerState;
@@ -34,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     tracing_init::init(&cli.server.transport);
 
-    let state = Arc::new(RwLock::new(ServerState::new()));
+    let state = Arc::new(ServerState::new());
     let tools = build_tool_registry();
     let server = Arc::new(McpServer::new(
         "dravr-cageux-mcp",

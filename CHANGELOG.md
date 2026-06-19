@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.3] — 2026-06-19
+
+### Changed
+
+- deps: migrate `dravr-cageux-mcp` and `dravr-cageux-server` to dravr-tronc
+  0.5.3 (dual-era MCP engine); state is `Arc<S>` directly (tronc no longer wraps
+  it in a `RwLock`). The core `dravr-cageux` crate is unchanged.
+
 ## [0.5.2] — 2026-05-30
 
 
