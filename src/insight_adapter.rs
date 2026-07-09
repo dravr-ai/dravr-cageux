@@ -477,6 +477,8 @@ pub fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_owned()
     } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+        // Truncate on a character boundary so multibyte UTF-8 input cannot panic.
+        let head: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{head}...")
     }
 }
