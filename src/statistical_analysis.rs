@@ -312,8 +312,11 @@ impl StatisticalAnalyzer {
 
     /// Simplified t-test p-value calculation (two-tailed)
     fn t_test_p_value(t_stat: f64, df: usize) -> f64 {
-        // Simplified approximation for p-value calculation
-        // In a real implementation, you'd use a proper t-distribution
+        // LIMITATION(registre#16): approximates the t-distribution by mapping
+        // the t statistic to a z-equivalent and evaluating the normal CDF —
+        // accurate for large df, increasingly loose below df ≈ 30. The
+        // registered fix is a proper Student's t CDF (regularized incomplete
+        // beta function).
 
         if df == 0 {
             return 1.0;
