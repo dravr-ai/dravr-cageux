@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.4] — 2026-08-18
+
+### Fixed
+
+- fix(training-load): re-band TSB interpretation as form % of CTL —
+  `interpret_tsb` and `recommend_recovery_days` now take `ctl` and band on
+  `form_pct = tsb / ctl * 100` (absolute-TSB fallback when CTL <= 1), per the
+  TrainingPeaks/Friel and intervals.icu convention: below -30% overreaching,
+  -30%..+5% productive, +5%..+20% fresh, above +20% detraining; recovery days
+  start past -30% (1/2/3 at -30/-40/-50%); `check_overtraining_risk` replaces
+  the absolute ATL > 150 factor with ATL > 1.5x CTL and words factors as
+  magnitude statements rather than injury claims (Impellizzeri 2020).
+- fix: sidestep Rust 1.97 for_kv_map and bool_assert_comparison lints
+- fix(deps): bump quinn-proto past the memory-exhaustion advisory
+- fix: repair the SessionStart bootstrap guard for an empty .build
+- fix(insight): char-safe truncate_string to avoid UTF-8 boundary panic
+
 ## [0.5.3] — 2026-06-19
 
 ### Changed
