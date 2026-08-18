@@ -28,8 +28,8 @@ use crate::error::IntelligenceError;
 use crate::sleep_analysis::{
     HrvRecoveryStatus, HrvTrendAnalysis, SleepData, SleepQualityCategory, SleepQualityScore,
 };
+use crate::training_load::FormBand;
 use crate::training_load::TrainingLoad;
-use crate::training_load::TrainingLoadCalculator;
 use serde::{Deserialize, Serialize};
 
 /// Recovery recommendations and reasoning
@@ -353,12 +353,12 @@ impl RecoveryCalculator {
             "Recovery score: {overall_score:.1}/100 (TSB-only, partial assessment)"
         ));
 
-        // TSB interpretation
-        let tsb_status =
-            TrainingLoadCalculator::interpret_tsb(training_load.tsb, training_load.ctl);
+        // TSB interpretation, banded relative to this athlete's own chronic load
+        let form_band = FormBand::from_tsb(training_load.tsb, training_load.ctl);
         insights.push(format!(
-            "Training balance: TSB {:.1} ({:?})",
-            training_load.tsb, tsb_status
+            "Training balance: TSB {:.1} ({})",
+            training_load.tsb,
+            form_band.label()
         ));
 
         // Fitness/fatigue context
@@ -557,12 +557,12 @@ impl RecoveryCalculator {
         // Overall recovery insight
         insights.push(format!("Recovery score: {overall_score:.1}/100"));
 
-        // TSB insight
-        let tsb_status =
-            TrainingLoadCalculator::interpret_tsb(training_load.tsb, training_load.ctl);
+        // TSB insight, banded relative to this athlete's own chronic load
+        let form_band = FormBand::from_tsb(training_load.tsb, training_load.ctl);
         insights.push(format!(
-            "Training balance: TSB {:.1} ({:?})",
-            training_load.tsb, tsb_status
+            "Training balance: TSB {:.1} ({})",
+            training_load.tsb,
+            form_band.label()
         ));
 
         // Sleep insight

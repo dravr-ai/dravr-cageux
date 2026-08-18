@@ -18,12 +18,20 @@ use tracing::instrument;
 pub use crate::algorithms::training_load::TssDataPoint;
 
 /// CTL at or below this value carries no meaningful fitness base to normalize
-/// against; the form bands are then applied to absolute TSB instead of TSB as
-/// a percentage of CTL.
+/// against; form is then [`FormBand::InsufficientHistory`] rather than banded
+/// on absolute TSB, which means opposite things at CTL 40 and CTL 120.
 const MIN_CTL_FOR_RELATIVE_FORM: f64 = 1.0;
 
-/// Form (TSB as % of CTL) below which the athlete is overreaching.
-const OVERREACHING_FORM_PCT: f64 = -30.0;
+/// Form (TSB as % of CTL) below which the athlete is in the deepest fatigue band.
+const DEEP_FATIGUE_FORM_PCT: f64 = -30.0;
+
+/// Form (TSB as % of CTL) below which the athlete is at the deep end of the
+/// productive zone — a heavy block, not an emergency.
+const HEAVY_BLOCK_FORM_PCT: f64 = -20.0;
+
+/// Form (TSB as % of CTL) below which the athlete carries the normal fatigue
+/// of a productive training block.
+const PRODUCTIVE_FORM_PCT: f64 = -10.0;
 
 /// Form (TSB as % of CTL) at which the freshness band starts.
 const FRESH_FORM_PCT: f64 = 5.0;
@@ -266,44 +274,6 @@ impl TrainingLoadCalculator {
         ctl - atl
     }
 
-    /// Express TSB as form: a percentage of CTL (`tsb / ctl * 100`).
-    ///
-    /// When CTL is at or below [`MIN_CTL_FOR_RELATIVE_FORM`], the raw TSB is
-    /// returned so the form bands apply to absolute TSB instead.
-    fn form_percentage(tsb: f64, ctl: f64) -> f64 {
-        if ctl > MIN_CTL_FOR_RELATIVE_FORM {
-            tsb / ctl * 100.0
-        } else {
-            tsb
-        }
-    }
-
-    /// Interpret TSB relative to CTL and provide a training status.
-    ///
-    /// Form is expressed as a percentage of fitness (`form_pct = tsb / ctl *
-    /// 100`), following the TrainingPeaks/Friel and intervals.icu convention,
-    /// so the same TSB reads differently for a 40-CTL and a 100-CTL athlete:
-    /// - form below -30% of CTL: overreaching (high fatigue, recovery needed)
-    /// - form -30% to +5% of CTL: productive training zone
-    /// - form +5% to +20% of CTL: fresh, ready to perform
-    /// - form above +20% of CTL: risk of detraining
-    ///
-    /// When CTL is at or below 1.0, there is no meaningful fitness base to
-    /// normalize against and the same band edges apply to absolute TSB.
-    #[must_use]
-    pub fn interpret_tsb(tsb: f64, ctl: f64) -> TrainingStatus {
-        let form_pct = Self::form_percentage(tsb, ctl);
-        if form_pct < OVERREACHING_FORM_PCT {
-            TrainingStatus::Overreaching
-        } else if form_pct < FRESH_FORM_PCT {
-            TrainingStatus::Productive
-        } else if form_pct <= DETRAINING_FORM_PCT {
-            TrainingStatus::Fresh
-        } else {
-            TrainingStatus::Detraining
-        }
-    }
-
     /// Check whether the athlete's load pattern warrants caution
     ///
     /// Flagged factors are descriptive magnitude statements about the load
@@ -331,7 +301,7 @@ impl TrainingLoadCalculator {
                 .push("Acute load more than 50% above chronic load (very rapid ramp)".to_owned());
         }
 
-        if Self::form_percentage(training_load.tsb, training_load.ctl) < OVERREACHING_FORM_PCT {
+        if FormBand::from_tsb(training_load.tsb, training_load.ctl) == FormBand::DeepFatigue {
             risk_factors.push("Form deeper than -30% of fitness".to_owned());
         }
 
@@ -351,42 +321,122 @@ impl TrainingLoadCalculator {
 
     /// Calculate recommended recovery days from form (TSB as % of CTL)
     ///
-    /// Form between -30% and +5% of CTL is normal productive training and gets
-    /// no recovery prescription; days are only recommended once form drops
-    /// below the overreaching edge (-30%). When CTL is at or below 1.0, the
-    /// same band edges apply to absolute TSB.
+    /// Everything at or above the deep-fatigue edge (-30% of CTL) is normal
+    /// training and gets no recovery prescription; days are only recommended
+    /// once form drops past it. Returns 0 when there is no chronic base to
+    /// normalize against — an athlete whose form cannot be judged is not
+    /// handed a rest prescription derived from a number that means nothing.
     #[must_use]
     pub fn recommend_recovery_days(tsb: f64, ctl: f64) -> u32 {
         /// Form (% of CTL) below which several recovery days are warranted.
         const SEVERE_FATIGUE_FORM_PCT: f64 = -50.0;
         /// Form (% of CTL) below which a couple of recovery days are warranted.
-        const DEEP_FATIGUE_FORM_PCT: f64 = -40.0;
+        const TWO_DAY_FATIGUE_FORM_PCT: f64 = -40.0;
 
-        let form_pct = Self::form_percentage(tsb, ctl);
+        let Some(form_pct) = FormBand::form_pct(tsb, ctl) else {
+            return 0;
+        };
         if form_pct < SEVERE_FATIGUE_FORM_PCT {
             return 3;
         }
-        if form_pct < DEEP_FATIGUE_FORM_PCT {
+        if form_pct < TWO_DAY_FATIGUE_FORM_PCT {
             return 2;
         }
-        if form_pct < OVERREACHING_FORM_PCT {
+        if form_pct < DEEP_FATIGUE_FORM_PCT {
             return 1;
         }
         0
     }
 }
 
-/// Training status based on TSB
+/// Descriptive band for an athlete's form, expressed relative to their own
+/// chronic load (`form_pct = tsb / ctl * 100`) per the TrainingPeaks/Friel and
+/// intervals.icu convention.
+///
+/// The bands state the magnitude of fatigue relative to fitness. They are not
+/// injury predictions: fixed-threshold injury prediction from load ratios is
+/// not supported by the literature (Impellizzeri et al., 2020). This is the
+/// single form vocabulary — every surface that bands form derives it from
+/// here rather than comparing raw TSB to a constant, because the same TSB is
+/// a normal build week at CTL 120 and the deepest fatigue at CTL 40.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TrainingStatus {
-    /// Form below -30% of CTL: overreaching, high fatigue
-    Overreaching,
-    /// Form -30% to +5% of CTL: productive training zone
+#[serde(rename_all = "snake_case")]
+pub enum FormBand {
+    /// No chronic base to normalize against — form is not interpretable.
+    InsufficientHistory,
+    /// Form below -30% of CTL: the deepest fatigue band.
+    DeepFatigue,
+    /// Form -30% to -20% of CTL: the deep end of the productive zone.
+    HeavyBlock,
+    /// Form -20% to -10% of CTL: the normal fatigue of a productive block.
     Productive,
-    /// Form +5% to +20% of CTL: fresh, ready to perform
+    /// Form -10% to +5% of CTL: neither fatigued nor peaked.
+    Balanced,
+    /// Form +5% to +20% of CTL: fresh, ready for quality work or racing.
     Fresh,
-    /// Form above +20% of CTL: risk of detraining
+    /// Form above +20% of CTL: risk of detraining.
     Detraining,
+}
+
+impl FormBand {
+    /// Express TSB as form: a percentage of CTL (`tsb / ctl * 100`).
+    ///
+    /// `None` when CTL is at or below [`MIN_CTL_FOR_RELATIVE_FORM`]. A raw TSB
+    /// with no chronic base to scale it is not interpretable as form, and
+    /// banding it on the absolute number would read a beginner's first hard
+    /// week as an elite's deepest fatigue. Callers report the absence as
+    /// insufficient history; they never substitute absolute-TSB thresholds.
+    #[must_use]
+    pub fn form_pct(tsb: f64, ctl: f64) -> Option<f64> {
+        if ctl > MIN_CTL_FOR_RELATIVE_FORM {
+            Some(tsb / ctl * 100.0)
+        } else {
+            None
+        }
+    }
+
+    /// Band an athlete's form from their TSB and CTL.
+    #[must_use]
+    pub fn from_tsb(tsb: f64, ctl: f64) -> Self {
+        Self::from_form_pct(Self::form_pct(tsb, ctl))
+    }
+
+    /// Band an already-computed form percentage.
+    #[must_use]
+    pub fn from_form_pct(form_pct: Option<f64>) -> Self {
+        let Some(pct) = form_pct else {
+            return Self::InsufficientHistory;
+        };
+        if pct < DEEP_FATIGUE_FORM_PCT {
+            Self::DeepFatigue
+        } else if pct < HEAVY_BLOCK_FORM_PCT {
+            Self::HeavyBlock
+        } else if pct < PRODUCTIVE_FORM_PCT {
+            Self::Productive
+        } else if pct < FRESH_FORM_PCT {
+            Self::Balanced
+        } else if pct <= DETRAINING_FORM_PCT {
+            Self::Fresh
+        } else {
+            Self::Detraining
+        }
+    }
+
+    /// Descriptive one-line reading of the band, for surfaces that hand the
+    /// athlete's state to a coach or a language model. Never risk or injury
+    /// language — the band describes fatigue relative to fitness.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::InsufficientHistory => "insufficient chronic history to judge form",
+            Self::DeepFatigue => "deep fatigue - form far below this athlete's own fitness",
+            Self::HeavyBlock => "heavy block - the deep end of the productive zone",
+            Self::Productive => "productive - building fitness under normal training fatigue",
+            Self::Balanced => "balanced - neither fatigued nor peaked",
+            Self::Fresh => "fresh - ready for quality work or racing",
+            Self::Detraining => "very fresh - possibly detraining",
+        }
+    }
 }
 
 /// Risk level for overtraining

@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.5.5] — 2026-08-18
+
+### Changed
+
+- refactor(training-load)!: `TrainingStatus` is replaced by `FormBand`, one
+  descriptive form vocabulary for every surface that bands form. The four old
+  statuses become seven bands — `InsufficientHistory`, `DeepFatigue` (below
+  -30% of CTL), `HeavyBlock` (-30%..-20%), `Productive` (-20%..-10%),
+  `Balanced` (-10%..+5%), `Fresh` (+5%..+20%), `Detraining` (above +20%) —
+  carrying the band edges consumers previously hand-rolled against raw TSB.
+  `FormBand::form_pct`, `FormBand::from_tsb`, `FormBand::from_form_pct` and
+  `FormBand::label` are the entry points; `TrainingLoadCalculator::interpret_tsb`
+  is removed in favour of `FormBand::from_tsb`.
+
+### Fixed
+
+- fix(training-load): form is no longer banded on absolute TSB when there is
+  no chronic base. `form_percentage` returned the raw TSB when CTL <= 1 and the
+  bands were then applied to it, so a beginner's first hard week (CTL 0.5, TSB
+  -35) read as an elite's deepest fatigue. `FormBand::form_pct` returns `None`
+  there and the state is `InsufficientHistory`: `recommend_recovery_days`
+  prescribes nothing and `check_overtraining_risk` raises no form factor,
+  rather than deriving either from a number that cannot be interpreted.
+
 ## [0.5.4] — 2026-08-18
 
 ### Fixed
