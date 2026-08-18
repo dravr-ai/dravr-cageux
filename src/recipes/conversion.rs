@@ -382,7 +382,7 @@ fn lookup_density(ingredient_name: &str) -> Option<&'static IngredientDensity> {
     }
 
     // Check aliases
-    for (_, density) in INGREDIENT_DENSITIES.iter() {
+    for density in INGREDIENT_DENSITIES.values() {
         for alias in density.aliases {
             if alias.eq_ignore_ascii_case(&normalized) {
                 return Some(density);

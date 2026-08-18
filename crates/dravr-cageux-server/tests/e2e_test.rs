@@ -223,5 +223,5 @@ async fn mcp_tools_call_unknown_tool_returns_error() {
     let json: Value = serde_json::from_slice(&body).unwrap();
     // The result contains an error from the tool registry
     let result = &json["result"];
-    assert!(result["isError"] == true);
+    assert_eq!(result["isError"], true);
 }
