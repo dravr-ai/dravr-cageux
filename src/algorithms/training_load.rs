@@ -207,10 +207,11 @@ impl TrainingLoadAlgorithm {
     ///
     /// # Interpretation
     ///
-    /// - TSB < -10: Overreaching (high fatigue, need recovery)
-    /// - TSB -10 to 0: Productive training zone
-    /// - TSB 0 to +10: Fresh, ready to perform
-    /// - TSB > +10: Risk of detraining
+    /// Interpretation is CTL-relative (form as a percentage of fitness):
+    /// - form below -30% of CTL: overreaching (high fatigue, recovery needed)
+    /// - form -30% to +5% of CTL: productive training zone
+    /// - form +5% to +20% of CTL: fresh, ready to perform
+    /// - form above +20% of CTL: risk of detraining
     #[must_use]
     pub const fn calculate_tsb(ctl: f64, atl: f64) -> f64 {
         ctl - atl

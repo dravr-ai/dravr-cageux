@@ -17,6 +17,20 @@ use tracing::instrument;
 /// share a single definition.
 pub use crate::algorithms::training_load::TssDataPoint;
 
+/// CTL at or below this value carries no meaningful fitness base to normalize
+/// against; the form bands are then applied to absolute TSB instead of TSB as
+/// a percentage of CTL.
+const MIN_CTL_FOR_RELATIVE_FORM: f64 = 1.0;
+
+/// Form (TSB as % of CTL) below which the athlete is overreaching.
+const OVERREACHING_FORM_PCT: f64 = -30.0;
+
+/// Form (TSB as % of CTL) at which the freshness band starts.
+const FRESH_FORM_PCT: f64 = 5.0;
+
+/// Form (TSB as % of CTL) above which detraining risk begins.
+const DETRAINING_FORM_PCT: f64 = 20.0;
+
 /// Training load metrics for an athlete
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingLoad {
@@ -245,54 +259,80 @@ impl TrainingLoadCalculator {
 
     /// Calculate TSB (Training Stress Balance) = CTL - ATL
     ///
-    /// Interpretation:
-    /// - TSB < -10: Overreaching (high fatigue, need recovery)
-    /// - TSB -10 to 0: Productive training zone
-    /// - TSB 0 to +10: Fresh, ready to perform
-    /// - TSB > +10: Risk of detraining
+    /// Interpretation is CTL-relative (form as a percentage of fitness) —
+    /// see [`Self::interpret_tsb`] for the band definitions.
     #[must_use]
     pub const fn calculate_tsb(ctl: f64, atl: f64) -> f64 {
         ctl - atl
     }
 
-    /// Interpret TSB value and provide status
+    /// Express TSB as form: a percentage of CTL (`tsb / ctl * 100`).
+    ///
+    /// When CTL is at or below [`MIN_CTL_FOR_RELATIVE_FORM`], the raw TSB is
+    /// returned so the form bands apply to absolute TSB instead.
+    fn form_percentage(tsb: f64, ctl: f64) -> f64 {
+        if ctl > MIN_CTL_FOR_RELATIVE_FORM {
+            tsb / ctl * 100.0
+        } else {
+            tsb
+        }
+    }
+
+    /// Interpret TSB relative to CTL and provide a training status.
+    ///
+    /// Form is expressed as a percentage of fitness (`form_pct = tsb / ctl *
+    /// 100`), following the TrainingPeaks/Friel and intervals.icu convention,
+    /// so the same TSB reads differently for a 40-CTL and a 100-CTL athlete:
+    /// - form below -30% of CTL: overreaching (high fatigue, recovery needed)
+    /// - form -30% to +5% of CTL: productive training zone
+    /// - form +5% to +20% of CTL: fresh, ready to perform
+    /// - form above +20% of CTL: risk of detraining
+    ///
+    /// When CTL is at or below 1.0, there is no meaningful fitness base to
+    /// normalize against and the same band edges apply to absolute TSB.
     #[must_use]
-    pub fn interpret_tsb(tsb: f64) -> TrainingStatus {
-        if tsb < -10.0 {
+    pub fn interpret_tsb(tsb: f64, ctl: f64) -> TrainingStatus {
+        let form_pct = Self::form_percentage(tsb, ctl);
+        if form_pct < OVERREACHING_FORM_PCT {
             TrainingStatus::Overreaching
-        } else if tsb < 0.0 {
+        } else if form_pct < FRESH_FORM_PCT {
             TrainingStatus::Productive
-        } else if tsb <= 10.0 {
+        } else if form_pct <= DETRAINING_FORM_PCT {
             TrainingStatus::Fresh
         } else {
             TrainingStatus::Detraining
         }
     }
 
-    /// Check if athlete is at risk of overtraining
+    /// Check whether the athlete's load pattern warrants caution
     ///
-    /// Warning conditions:
-    /// - ATL > CTL x 1.3: Acute load spike
-    /// - ATL > 150: Very high acute load
-    /// - TSB < -10: Deep fatigue
+    /// Flagged factors are descriptive magnitude statements about the load
+    /// pattern, never injury predictions (fixed-threshold injury prediction
+    /// is not supported by the literature — Impellizzeri et al., 2020):
+    /// - ATL more than 30% above CTL: rapid ramp in acute load
+    /// - ATL more than 50% above CTL: acute load far above the chronic base
+    /// - Form below -30% of CTL: deep negative form
     #[must_use]
     pub fn check_overtraining_risk(training_load: &TrainingLoad) -> OvertrainingRisk {
+        /// Acute-to-chronic ratio above which the ramp in load is flagged.
+        const ACUTE_RAMP_RATIO: f64 = 1.3;
+        /// Acute-to-chronic ratio above which acute load is far beyond the base.
+        const ACUTE_SPIKE_RATIO: f64 = 1.5;
+
         let mut risk_factors = Vec::new();
 
-        // Check for acute load spike
-        if training_load.ctl > 0.0 && training_load.atl > training_load.ctl * 1.3 {
+        if training_load.ctl > 0.0 && training_load.atl > training_load.ctl * ACUTE_RAMP_RATIO {
             risk_factors
-                .push("Acute training load spike detected (>30% above chronic load)".to_owned());
+                .push("Acute load more than 30% above chronic load (rapid ramp)".to_owned());
         }
 
-        // Check for very high acute load
-        if training_load.atl > 150.0 {
-            risk_factors.push("Very high acute training load (>150 TSS/day)".to_owned());
+        if training_load.ctl > 0.0 && training_load.atl > training_load.ctl * ACUTE_SPIKE_RATIO {
+            risk_factors
+                .push("Acute load more than 50% above chronic load (very rapid ramp)".to_owned());
         }
 
-        // Check for deep fatigue
-        if training_load.tsb < -10.0 {
-            risk_factors.push("Deep fatigue detected (TSB < -10) - recovery needed".to_owned());
+        if Self::form_percentage(training_load.tsb, training_load.ctl) < OVERREACHING_FORM_PCT {
+            risk_factors.push("Form deeper than -30% of fitness".to_owned());
         }
 
         let risk_level = if risk_factors.len() >= 2 {
@@ -309,25 +349,27 @@ impl TrainingLoadCalculator {
         }
     }
 
-    /// Calculate recommended recovery days based on TSB
+    /// Calculate recommended recovery days from form (TSB as % of CTL)
+    ///
+    /// Form between -30% and +5% of CTL is normal productive training and gets
+    /// no recovery prescription; days are only recommended once form drops
+    /// below the overreaching edge (-30%). When CTL is at or below 1.0, the
+    /// same band edges apply to absolute TSB.
     #[must_use]
-    pub fn recommend_recovery_days(tsb: f64) -> u32 {
-        // Multi-level threshold function for recovery recommendations
-        const VERY_DEEP_FATIGUE: f64 = -20.0;
-        const DEEP_FATIGUE: f64 = -15.0;
-        const MODERATE_FATIGUE: f64 = -10.0;
-        const LIGHT_FATIGUE: f64 = 0.0;
+    pub fn recommend_recovery_days(tsb: f64, ctl: f64) -> u32 {
+        /// Form (% of CTL) below which several recovery days are warranted.
+        const SEVERE_FATIGUE_FORM_PCT: f64 = -50.0;
+        /// Form (% of CTL) below which a couple of recovery days are warranted.
+        const DEEP_FATIGUE_FORM_PCT: f64 = -40.0;
 
-        if tsb < VERY_DEEP_FATIGUE {
-            return 5;
-        }
-        if tsb < DEEP_FATIGUE {
+        let form_pct = Self::form_percentage(tsb, ctl);
+        if form_pct < SEVERE_FATIGUE_FORM_PCT {
             return 3;
         }
-        if tsb < MODERATE_FATIGUE {
+        if form_pct < DEEP_FATIGUE_FORM_PCT {
             return 2;
         }
-        if tsb < LIGHT_FATIGUE {
+        if form_pct < OVERREACHING_FORM_PCT {
             return 1;
         }
         0
@@ -337,13 +379,13 @@ impl TrainingLoadCalculator {
 /// Training status based on TSB
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TrainingStatus {
-    /// TSB < -10: Overreaching, high fatigue
+    /// Form below -30% of CTL: overreaching, high fatigue
     Overreaching,
-    /// TSB -10 to 0: Productive training zone
+    /// Form -30% to +5% of CTL: productive training zone
     Productive,
-    /// TSB 0 to +10: Fresh, ready to perform
+    /// Form +5% to +20% of CTL: fresh, ready to perform
     Fresh,
-    /// TSB > +10: Risk of detraining
+    /// Form above +20% of CTL: risk of detraining
     Detraining,
 }
 

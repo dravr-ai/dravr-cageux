@@ -354,7 +354,8 @@ impl RecoveryCalculator {
         ));
 
         // TSB interpretation
-        let tsb_status = TrainingLoadCalculator::interpret_tsb(training_load.tsb);
+        let tsb_status =
+            TrainingLoadCalculator::interpret_tsb(training_load.tsb, training_load.ctl);
         insights.push(format!(
             "Training balance: TSB {:.1} ({:?})",
             training_load.tsb, tsb_status
@@ -557,7 +558,8 @@ impl RecoveryCalculator {
         insights.push(format!("Recovery score: {overall_score:.1}/100"));
 
         // TSB insight
-        let tsb_status = TrainingLoadCalculator::interpret_tsb(training_load.tsb);
+        let tsb_status =
+            TrainingLoadCalculator::interpret_tsb(training_load.tsb, training_load.ctl);
         insights.push(format!(
             "Training balance: TSB {:.1} ({:?})",
             training_load.tsb, tsb_status
