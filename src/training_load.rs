@@ -268,7 +268,7 @@ impl TrainingLoadCalculator {
     /// Calculate TSB (Training Stress Balance) = CTL - ATL
     ///
     /// Interpretation is CTL-relative (form as a percentage of fitness) —
-    /// see [`Self::interpret_tsb`] for the band definitions.
+    /// see [`FormBand`] for the band definitions.
     #[must_use]
     pub const fn calculate_tsb(ctl: f64, atl: f64) -> f64 {
         ctl - atl
@@ -278,39 +278,38 @@ impl TrainingLoadCalculator {
     ///
     /// Flagged factors are descriptive magnitude statements about the load
     /// pattern, never injury predictions (fixed-threshold injury prediction
-    /// is not supported by the literature — Impellizzeri et al., 2020):
-    /// - ATL more than 30% above CTL: rapid ramp in acute load
-    /// - ATL more than 50% above CTL: acute load far above the chronic base
-    /// - Form below -30% of CTL: deep negative form
+    /// is not supported by the literature — Impellizzeri et al., 2020).
+    ///
+    /// Severity grades the *depth* of one axis rather than counting restatements
+    /// of it. Acute-vs-chronic load and form are not independent observations:
+    /// because `tsb == ctl - atl`, "ATL more than 30% above CTL" and
+    /// [`FormBand::DeepFatigue`] are the same inequality. Listing both made every
+    /// athlete past 1.3 collect two "corroborating" factors, forced
+    /// [`RiskLevel::High`], and left [`RiskLevel::Moderate`] unreachable for
+    /// anyone with a chronic base. One observation, stated once, graded by band.
     #[must_use]
     pub fn check_overtraining_risk(training_load: &TrainingLoad) -> OvertrainingRisk {
-        /// Acute-to-chronic ratio above which the ramp in load is flagged.
-        const ACUTE_RAMP_RATIO: f64 = 1.3;
-        /// Acute-to-chronic ratio above which acute load is far beyond the base.
-        const ACUTE_SPIKE_RATIO: f64 = 1.5;
+        let form_pct = FormBand::form_pct(training_load.tsb, training_load.ctl);
 
-        let mut risk_factors = Vec::new();
-
-        if training_load.ctl > 0.0 && training_load.atl > training_load.ctl * ACUTE_RAMP_RATIO {
-            risk_factors
-                .push("Acute load more than 30% above chronic load (rapid ramp)".to_owned());
-        }
-
-        if training_load.ctl > 0.0 && training_load.atl > training_load.ctl * ACUTE_SPIKE_RATIO {
-            risk_factors
-                .push("Acute load more than 50% above chronic load (very rapid ramp)".to_owned());
-        }
-
-        if FormBand::from_tsb(training_load.tsb, training_load.ctl) == FormBand::DeepFatigue {
-            risk_factors.push("Form deeper than -30% of fitness".to_owned());
-        }
-
-        let risk_level = if risk_factors.len() >= 2 {
-            RiskLevel::High
-        } else if risk_factors.len() == 1 {
-            RiskLevel::Moderate
-        } else {
-            RiskLevel::Low
+        let (risk_level, risk_factors) = match FormBand::from_form_pct(form_pct) {
+            FormBand::DeepFatigue => (
+                RiskLevel::High,
+                vec![format!(
+                    "Acute load is carrying form to {:.0}% of chronic fitness, past the -30% band",
+                    form_pct.unwrap_or_default()
+                )],
+            ),
+            FormBand::HeavyBlock => (
+                RiskLevel::Moderate,
+                vec![format!(
+                    "Form at {:.0}% of chronic fitness - the deep end of a productive block",
+                    form_pct.unwrap_or_default()
+                )],
+            ),
+            // No chronic base to judge against makes no claim: at a near-zero CTL
+            // a single session swings the ratio wildly, and inventing a risk level
+            // from it is how beginners collected warnings for an ordinary week.
+            _ => (RiskLevel::Low, Vec::new()),
         };
 
         OvertrainingRisk {

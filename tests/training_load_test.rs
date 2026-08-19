@@ -186,58 +186,82 @@ fn recovery_days_without_chronic_base_prescribes_nothing() {
 // check_overtraining_risk — descriptive load-pattern factors
 // ============================================================================
 
-fn load(ctl: f64, atl: f64, tsb: f64) -> TrainingLoad {
+/// Build a physically consistent load: TSB *is* CTL - ATL, so a fixture cannot
+/// claim a form the acute/chronic ratio contradicts.
+///
+/// The previous helper took `tsb` as a free parameter, and every ramp test set
+/// it to a value CTL - ATL could never produce (CTL 100 / ATL 135 was written as
+/// TSB -20, not -35). That was the only way to make the acute-ratio factor and
+/// the form factor look independent — which they are not: `tsb == ctl - atl`
+/// makes "ATL 30% above CTL" and form below -30% the same inequality.
+fn load(ctl: f64, atl: f64) -> TrainingLoad {
     TrainingLoad {
         ctl,
         atl,
-        tsb,
+        tsb: ctl - atl,
         tss_history: Vec::new(),
     }
 }
 
 #[test]
 fn overtraining_risk_low_when_load_is_balanced() {
-    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(60.0, 55.0, 5.0));
+    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(60.0, 55.0));
     assert_eq!(risk.risk_level, RiskLevel::Low);
     assert!(risk.risk_factors.is_empty());
 }
 
 #[test]
-fn overtraining_risk_flags_acute_ramp_above_thirty_percent() {
-    // ATL 35% above CTL; form held at -20% so only the ramp factor fires
-    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 135.0, -20.0));
+fn overtraining_risk_moderate_through_the_heavy_block() {
+    // ATL 25% above CTL puts form at -25%: the deep end of a productive block.
+    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 125.0));
     assert_eq!(risk.risk_level, RiskLevel::Moderate);
     assert_eq!(risk.risk_factors.len(), 1);
-    assert!(risk.risk_factors[0].contains("more than 30% above chronic load"));
+    assert!(
+        risk.risk_factors[0].contains("-25% of chronic fitness"),
+        "got {:?}",
+        risk.risk_factors
+    );
 }
 
 #[test]
-fn overtraining_risk_flags_acute_load_far_above_chronic() {
-    // ATL 60% above CTL trips both ratio factors; form -25% stays in band
-    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 160.0, -25.0));
+fn overtraining_risk_high_past_the_deep_fatigue_band() {
+    // ATL 35% above CTL is form -35%, past the -30% edge.
+    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 135.0));
     assert_eq!(risk.risk_level, RiskLevel::High);
-    assert_eq!(risk.risk_factors.len(), 2);
-    assert!(risk
-        .risk_factors
-        .iter()
-        .any(|f| f.contains("more than 50% above chronic load")));
+    assert_eq!(risk.risk_factors.len(), 1);
+    assert!(
+        risk.risk_factors[0].contains("-35% of chronic fitness"),
+        "got {:?}",
+        risk.risk_factors
+    );
 }
 
 #[test]
-fn overtraining_risk_flags_form_below_minus_thirty_percent() {
-    // Ratio 1.1 is under both ramp thresholds; form -35% fires alone
-    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 110.0, -35.0));
-    assert_eq!(risk.risk_level, RiskLevel::Moderate);
-    assert_eq!(risk.risk_factors.len(), 1);
-    assert!(risk.risk_factors[0].contains("-30% of fitness"));
+fn overtraining_risk_states_one_observation_once() {
+    // The regression guard. A very deep athlete is one observation, not three:
+    // acute-ramp, acute-spike and deep-form were the same inequality restated,
+    // which forced High on every athlete past 1.3 and made Moderate unreachable.
+    let deep = TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 160.0));
+    assert_eq!(deep.risk_level, RiskLevel::High);
+    assert_eq!(
+        deep.risk_factors.len(),
+        1,
+        "one axis must yield one factor, got {:?}",
+        deep.risk_factors
+    );
+
+    // And Moderate stays reachable, which it was not while the count decided severity.
+    assert_eq!(
+        TrainingLoadCalculator::check_overtraining_risk(&load(100.0, 122.0)).risk_level,
+        RiskLevel::Moderate
+    );
 }
 
 #[test]
 fn overtraining_risk_without_chronic_base_flags_nothing() {
-    // Neither ratio factor can fire without a chronic base, and form is not
-    // interpretable, so the honest result is no factors rather than a
-    // fabricated one read off absolute TSB.
-    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(0.0, 80.0, -40.0));
+    // Form is not interpretable without a chronic base, so the honest result is
+    // no factors rather than one fabricated from an absolute TSB.
+    let risk = TrainingLoadCalculator::check_overtraining_risk(&load(0.0, 80.0));
     assert_eq!(risk.risk_level, RiskLevel::Low);
     assert!(risk.risk_factors.is_empty());
 }
