@@ -198,7 +198,7 @@ impl RecoveryCalculator {
         // Determine training readiness
         let training_readiness = Self::determine_training_readiness(
             overall_score,
-            training_load.tsb,
+            training_load,
             sleep_quality.quality_category,
             hrv_analysis.map(|h| h.recovery_status),
             config,
@@ -327,14 +327,22 @@ impl RecoveryCalculator {
     ) -> TrainingReadiness {
         let excellent_threshold = config.recovery_scoring.excellent_threshold;
         let good_threshold = config.recovery_scoring.good_threshold;
-        let fair_threshold = config.recovery_scoring.fair_threshold;
         let band = FormBand::from_tsb(training_load.tsb, training_load.ctl);
 
         // Rest comes off the deepest form band, never an absolute TSB. At CTL 150
         // a TSB of -20 is ordinary mid-block form, yet the old cut (-15) returned
         // RestNeeded for it while the training-load tool called the same athlete
         // productive in the same conversation.
-        if band == FormBand::DeepFatigue || overall_score < fair_threshold {
+        //
+        // `overall_score` is deliberately absent from this gate. In TSB-only mode
+        // it *is* `score_tsb(tsb)` — the same axis as the band, scored against
+        // absolute thresholds — so testing it here re-introduced exactly what the
+        // band replaced: the CTL-150 athlete above scores 20 against a fair
+        // threshold of 50 and was still ordered to stop, one line below the
+        // comment saying they would not be. The score keeps its real job of
+        // separating the upper three levels; it does not get a second, absolute
+        // vote on whether the athlete rests.
+        if band == FormBand::DeepFatigue {
             return TrainingReadiness::RestNeeded;
         }
 
@@ -537,7 +545,7 @@ impl RecoveryCalculator {
     #[must_use]
     pub fn determine_training_readiness(
         overall_score: f64,
-        tsb: f64,
+        training_load: &TrainingLoad,
         sleep_category: SleepQualityCategory,
         hrv_status: Option<HrvRecoveryStatus>,
         config: &SleepRecoveryConfig,
@@ -545,10 +553,13 @@ impl RecoveryCalculator {
         let excellent_threshold = config.recovery_scoring.excellent_threshold;
         let good_threshold = config.recovery_scoring.good_threshold;
         let fair_threshold = config.recovery_scoring.fair_threshold;
-        let highly_fatigued_tsb = config.training_stress_balance.highly_fatigued_tsb;
+        let band = FormBand::from_tsb(training_load.tsb, training_load.ctl);
 
-        // Check for critical rest indicators
-        let critical_rest_needed = tsb < highly_fatigued_tsb
+        // Load contributes rest only from the deepest band. An absolute cut at
+        // -15 called a CTL-150 athlete at TSB -20 critical, when that is -13% of
+        // their own fitness — ordinary mid-block form. Sleep and HRV keep their
+        // votes: unlike the load score, they are genuinely independent signals.
+        let critical_rest_needed = band == FormBand::DeepFatigue
             || sleep_category == SleepQualityCategory::Poor
             || hrv_status == Some(HrvRecoveryStatus::HighlyFatigued);
 
@@ -556,7 +567,14 @@ impl RecoveryCalculator {
             return TrainingReadiness::RestNeeded;
         }
 
-        if overall_score >= excellent_threshold && tsb >= 0.0 {
+        // Freshness is relative too: TSB >= 0 made a CTL-40 athlete at +1 as
+        // clear for hard work as a CTL-150 athlete at +1.
+        if overall_score >= excellent_threshold
+            && matches!(
+                band,
+                FormBand::Balanced | FormBand::Fresh | FormBand::Detraining
+            )
+        {
             TrainingReadiness::ReadyForHard
         } else if overall_score >= good_threshold {
             TrainingReadiness::ReadyForModerate
