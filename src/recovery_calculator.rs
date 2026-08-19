@@ -30,6 +30,7 @@ use crate::sleep_analysis::{
 };
 use crate::training_load::FormBand;
 use crate::training_load::TrainingLoad;
+use crate::training_load::{DEEP_FATIGUE_FORM_PCT, SEVERE_FATIGUE_FORM_PCT};
 use serde::{Deserialize, Serialize};
 
 /// Recovery recommendations and reasoning
@@ -281,7 +282,7 @@ impl RecoveryCalculator {
 
         // Determine training readiness (conservative without sleep/HRV data)
         let training_readiness =
-            Self::determine_training_readiness_tsb_only(overall_score, training_load.tsb, config);
+            Self::determine_training_readiness_tsb_only(overall_score, training_load, config);
 
         // Check if rest day recommended
         let rest_day_recommended = matches!(training_readiness, TrainingReadiness::RestNeeded);
@@ -291,7 +292,7 @@ impl RecoveryCalculator {
 
         // Generate TSB-only recommendations
         let (recommendations, reasoning) =
-            Self::generate_tsb_only_recommendations(training_readiness, training_load, config);
+            Self::generate_tsb_only_recommendations(training_readiness, training_load);
 
         // Limitations for TSB-only mode
         let limitations = vec![
@@ -321,23 +322,33 @@ impl RecoveryCalculator {
     /// Determine training readiness for TSB-only mode (more conservative)
     fn determine_training_readiness_tsb_only(
         overall_score: f64,
-        tsb: f64,
+        training_load: &TrainingLoad,
         config: &SleepRecoveryConfig,
     ) -> TrainingReadiness {
         let excellent_threshold = config.recovery_scoring.excellent_threshold;
         let good_threshold = config.recovery_scoring.good_threshold;
         let fair_threshold = config.recovery_scoring.fair_threshold;
-        let highly_fatigued_tsb = config.training_stress_balance.highly_fatigued_tsb;
+        let band = FormBand::from_tsb(training_load.tsb, training_load.ctl);
 
-        // Critical rest indicator based on TSB alone
-        if tsb < highly_fatigued_tsb || overall_score < fair_threshold {
+        // Rest comes off the deepest form band, never an absolute TSB. At CTL 150
+        // a TSB of -20 is ordinary mid-block form, yet the old cut (-15) returned
+        // RestNeeded for it while the training-load tool called the same athlete
+        // productive in the same conversation.
+        if band == FormBand::DeepFatigue || overall_score < fair_threshold {
             return TrainingReadiness::RestNeeded;
         }
 
         // Be more conservative in TSB-only mode (require higher scores)
-        if overall_score >= excellent_threshold && tsb >= 10.0 {
+        if overall_score >= excellent_threshold
+            && matches!(band, FormBand::Fresh | FormBand::Detraining)
+        {
             TrainingReadiness::ReadyForHard
-        } else if overall_score >= good_threshold && tsb >= 0.0 {
+        } else if overall_score >= good_threshold
+            && matches!(
+                band,
+                FormBand::Balanced | FormBand::Fresh | FormBand::Detraining
+            )
+        {
             TrainingReadiness::ReadyForModerate
         } else {
             TrainingReadiness::EasyOnly
@@ -379,12 +390,11 @@ impl RecoveryCalculator {
     fn generate_tsb_only_recommendations(
         training_readiness: TrainingReadiness,
         training_load: &TrainingLoad,
-        config: &SleepRecoveryConfig,
     ) -> (Vec<String>, Vec<String>) {
         let mut recommendations = Vec::new();
         let mut reasoning = Vec::new();
-        let fatigued_tsb = config.training_stress_balance.fatigued_tsb;
-        let highly_fatigued_tsb = config.training_stress_balance.highly_fatigued_tsb;
+        let form_pct = FormBand::form_pct(training_load.tsb, training_load.ctl);
+        let band = FormBand::from_form_pct(form_pct);
 
         match training_readiness {
             TrainingReadiness::ReadyForHard => {
@@ -408,16 +418,16 @@ impl RecoveryCalculator {
                 recommendations
                     .push("REST DAY RECOMMENDED based on training load analysis".to_owned());
 
-                if training_load.tsb < highly_fatigued_tsb {
-                    reasoning.push(format!(
-                        "Extreme training fatigue detected (TSB: {:.1})",
-                        training_load.tsb
-                    ));
-                } else if training_load.tsb < fatigued_tsb {
-                    reasoning.push(format!(
-                        "High training fatigue (TSB: {:.1})",
-                        training_load.tsb
-                    ));
+                if let Some(pct) = form_pct {
+                    if pct < SEVERE_FATIGUE_FORM_PCT {
+                        reasoning.push(format!(
+                            "Form at {pct:.0}% of chronic fitness - the deepest fatigue band"
+                        ));
+                    } else if pct < DEEP_FATIGUE_FORM_PCT {
+                        reasoning.push(format!(
+                            "Form at {pct:.0}% of chronic fitness - past the productive band"
+                        ));
+                    }
                 }
             }
         }
@@ -427,8 +437,8 @@ impl RecoveryCalculator {
             "For more accurate recovery assessment, connect a sleep tracking provider".to_owned(),
         );
 
-        // TSB-specific recommendations
-        if training_load.tsb < fatigued_tsb {
+        // Form-specific recommendations
+        if matches!(band, FormBand::DeepFatigue | FormBand::HeavyBlock) {
             recommendations
                 .push("Consider a recovery week to allow fitness gains to consolidate".to_owned());
         }
@@ -441,6 +451,16 @@ impl RecoveryCalculator {
     /// TSB interpretation based on Banister model:
     /// - Negative TSB = fatigue > fitness (building)
     /// - Positive TSB = fitness > fatigue (fresh)
+    ///
+    /// LIMITATION(registre#41): `score_tsb` bands absolute TSB against the five
+    /// thresholds in `SleepRecoveryConfig::training_stress_balance`, so the same
+    /// TSB scores identically for a CTL-150 and a CTL-40 athlete even though it
+    /// is ordinary mid-block form for one and the deepest fatigue for the other.
+    /// The verdict points that prescribe rest were migrated to [`FormBand`]; this
+    /// continuous score was not, because those thresholds are a
+    /// tenant-configurable admin schema with stored values, and reinterpreting
+    /// them as percentages of CTL would silently change what a tenant's
+    /// customised number means. Finishing it needs a stored-value migration.
     #[doc(hidden)]
     #[must_use]
     pub fn score_tsb(tsb: f64, config: &SleepRecoveryConfig) -> f64 {
@@ -592,8 +612,8 @@ impl RecoveryCalculator {
     ) -> RecoveryRecommendations {
         let mut recommendations = Vec::new();
         let mut reasoning = Vec::new();
-        let highly_fatigued_tsb = config.training_stress_balance.highly_fatigued_tsb;
-        let fatigued_tsb = config.training_stress_balance.fatigued_tsb;
+        let form_pct = FormBand::form_pct(training_load.tsb, training_load.ctl);
+        let band = FormBand::from_form_pct(form_pct);
         let athlete_optimal_hours = config.sleep_duration.athlete_optimal_hours;
         let fair_threshold = config.recovery_scoring.fair_threshold;
 
@@ -621,11 +641,12 @@ impl RecoveryCalculator {
             TrainingReadiness::RestNeeded => {
                 recommendations.push("REST DAY RECOMMENDED - prioritize recovery".to_owned());
 
-                if training_load.tsb < highly_fatigued_tsb {
-                    reasoning.push(format!(
-                        "Extreme training fatigue detected (TSB: {:.1})",
-                        training_load.tsb
-                    ));
+                if let Some(pct) = form_pct {
+                    if pct < DEEP_FATIGUE_FORM_PCT {
+                        reasoning.push(format!(
+                            "Form at {pct:.0}% of chronic fitness - past the productive band"
+                        ));
+                    }
                 }
                 if sleep_quality.overall_score < fair_threshold {
                     reasoning.push(format!(
@@ -649,8 +670,8 @@ impl RecoveryCalculator {
             ));
         }
 
-        // TSB-specific recommendations
-        if training_load.tsb < fatigued_tsb {
+        // Form-specific recommendations
+        if matches!(band, FormBand::DeepFatigue | FormBand::HeavyBlock) {
             recommendations
                 .push("Consider a recovery week to allow fitness gains to consolidate".to_owned());
         }

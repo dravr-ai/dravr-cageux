@@ -66,13 +66,24 @@ fn form_band_without_chronic_base_is_insufficient_history_not_absolute_tsb() {
             "TSB {tsb} at CTL 0 must not be banded"
         );
     }
-    // The guard is on CTL, not TSB: one unit of chronic load is still no base.
+    // The guard is a chronic-base guard, not a divide-by-zero guard. Because
+    // DeepFatigue is exactly `atl > 1.3 * ctl`, a beginner clears it with one
+    // ordinary hard week — CTL 10 / ATL 14 is form -40% — and used to collect an
+    // overtraining warning and a critical flag for it.
     assert_eq!(
-        FormBand::from_tsb(-35.0, 1.0),
-        FormBand::InsufficientHistory
+        FormBand::from_tsb(-4.0, 10.0),
+        FormBand::InsufficientHistory,
+        "a CTL-10 beginner must not band as deepest fatigue for one hard week"
     );
-    // Just past the guard, banding resumes: -0.1 on CTL 1.5 is -6.7% form.
-    assert_eq!(FormBand::from_tsb(-0.1, 1.5), FormBand::Balanced);
+    assert_eq!(
+        FormBand::from_tsb(-35.0, 19.9),
+        FormBand::InsufficientHistory,
+        "just under the floor there is still no base to divide by"
+    );
+    // Just past the floor, banding resumes: -3 on CTL 20.1 is -14.9% form.
+    assert_eq!(FormBand::from_tsb(-3.0, 20.1), FormBand::Productive);
+    // And an athlete with a real base is banded as before.
+    assert_eq!(FormBand::from_tsb(-35.0, 100.0), FormBand::DeepFatigue);
 }
 
 #[test]
@@ -82,6 +93,11 @@ fn form_pct_is_tsb_over_ctl_and_none_without_a_base() {
     assert!((pct - (-77.647)).abs() < 0.01, "got {pct}");
     assert_eq!(FormBand::form_pct(-25.0, 100.0), Some(-25.0));
     assert_eq!(FormBand::form_pct(-10.0, 0.5), None);
+    assert_eq!(
+        FormBand::form_pct(-4.0, 10.0),
+        None,
+        "below the chronic-base floor"
+    );
 }
 
 #[test]

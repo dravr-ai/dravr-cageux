@@ -20,10 +20,22 @@ pub use crate::algorithms::training_load::TssDataPoint;
 /// CTL at or below this value carries no meaningful fitness base to normalize
 /// against; form is then [`FormBand::InsufficientHistory`] rather than banded
 /// on absolute TSB, which means opposite things at CTL 40 and CTL 120.
-const MIN_CTL_FOR_RELATIVE_FORM: f64 = 1.0;
+///
+/// This is a chronic-base guard, not a divide-by-zero guard. Because
+/// `tsb == ctl - atl`, [`FormBand::DeepFatigue`] is exactly `atl > 1.3 * ctl` —
+/// a ratio a beginner clears with one ordinary hard week. At 1.0 the guard let a
+/// CTL-10 athlete at ATL 14 band as deepest fatigue and collect an overtraining
+/// warning, which inverted the goal of banding on form at all. Below roughly 20
+/// the ratio is dominated by single sessions and says nothing about form.
+const MIN_CTL_FOR_RELATIVE_FORM: f64 = 20.0;
 
 /// Form (TSB as % of CTL) below which the athlete is in the deepest fatigue band.
-const DEEP_FATIGUE_FORM_PCT: f64 = -30.0;
+pub(crate) const DEEP_FATIGUE_FORM_PCT: f64 = -30.0;
+
+/// Form (TSB as % of CTL) below which several recovery days are warranted — the
+/// deep end of the deepest band. Shared with the recovery calculator so the rest
+/// prescription and its stated reason cannot disagree about how deep is deep.
+pub(crate) const SEVERE_FATIGUE_FORM_PCT: f64 = -50.0;
 
 /// Form (TSB as % of CTL) below which the athlete is at the deep end of the
 /// productive zone — a heavy block, not an emergency.
@@ -327,8 +339,6 @@ impl TrainingLoadCalculator {
     /// handed a rest prescription derived from a number that means nothing.
     #[must_use]
     pub fn recommend_recovery_days(tsb: f64, ctl: f64) -> u32 {
-        /// Form (% of CTL) below which several recovery days are warranted.
-        const SEVERE_FATIGUE_FORM_PCT: f64 = -50.0;
         /// Form (% of CTL) below which a couple of recovery days are warranted.
         const TWO_DAY_FATIGUE_FORM_PCT: f64 = -40.0;
 
