@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "dravr-cageux"
-version = "0.5.7"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "dravr-cageux-mcp"
-version = "0.5.5"
+version = "0.6.0"
 dependencies = [
  "clap",
  "dravr-cageux",
@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "dravr-cageux-server"
-version = "0.5.5"
+version = "0.6.0"
 dependencies = [
  "axum",
  "clap",

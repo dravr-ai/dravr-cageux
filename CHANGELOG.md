@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0] — 2026-08-26
+
+### Removed
+
+- refactor(social)!: the social modules are deleted — `models::social`
+  (`FriendConnection`, `SharedInsight`, `InsightReaction`, `AdaptedInsight`,
+  `UserSocialSettings`, `InsightSharingPolicy`, `NotificationPreferences`,
+  `FriendStatus`, `ShareVisibility`, `InsightType`, `ReactionType`,
+  `TrainingPhase`, the request structs, `FriendInfo`, `FeedItem`,
+  `ReactionSummary`), `insight_adapter` (`InsightAdapter`,
+  `UserTrainingContext`, `AdaptationResult`, `truncate_string`) and
+  `friend_activity_cache` (`FriendActivityCache`, `FriendActivitySummary`,
+  `CacheConfig`, `CacheStats`, `DurationCategory`, `EffortLevel`,
+  `create_shared_cache`). dravr-platform, the only consumer, retired the
+  Insights and Friends surfaces by deletion, so nothing reads them.
+
 ## [0.5.5] — 2026-08-18
 
 ### Changed
