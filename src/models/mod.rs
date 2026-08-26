@@ -22,8 +22,6 @@ pub mod nutrition;
 pub mod recipes;
 /// Sleep quality and recovery data
 pub mod sleep;
-/// Social intelligence types (insights, sharing)
-pub mod social;
 /// Sport type classification
 pub mod sport;
 

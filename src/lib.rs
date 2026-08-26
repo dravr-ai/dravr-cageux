@@ -116,15 +116,6 @@ pub mod seasonality;
 pub mod sleep_analysis;
 
 // ============================================================================
-// Social intelligence modules
-// ============================================================================
-
-/// In-memory cache for friend activity summaries
-pub mod friend_activity_cache;
-/// Adapts shared insights to user's training context
-pub mod insight_adapter;
-
-// ============================================================================
 // Re-exports
 // ============================================================================
 
