@@ -9,7 +9,7 @@
           },
           {
             "type": "command",
-            "command": "git config core.hooksPath .githooks"
+            "command": "git config core.hooksPath .build/hooks"
           },
           {
             "type": "command",
