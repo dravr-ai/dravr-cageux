@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0] — 2026-09-03
+
+### Fixed
+
+- fix(patterns)!: count weekdays and hours on the athlete's clock
+
+
+
 ## [0.6.0] — 2026-08-26
 
 ### Removed
