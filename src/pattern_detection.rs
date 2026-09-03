@@ -7,6 +7,7 @@
 use crate::models::Activity;
 use crate::training_load::RiskLevel;
 use chrono::{Datelike, Timelike, Weekday};
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -101,9 +102,19 @@ pub struct PatternDetector;
 impl PatternDetector {
     /// Detect weekly training schedule patterns
     ///
-    /// Analyzes which days of the week are most commonly used for training
+    /// Analyzes which days of the week and which hours are most commonly used
+    /// for training, on the athlete's own civil clock.
+    ///
+    /// `zone` is the athlete's IANA timezone. Both histograms read
+    /// `Activity::start_date()`, which is UTC, so without the conversion every
+    /// session starting at or after 20:00 `America/Toronto` was counted on the
+    /// *following* weekday — and the hour histogram was shifted by the whole
+    /// offset, describing an athlete who trains at 18:00 as training at 22:00.
+    ///
+    /// Callers with no zone on file pass [`chrono_tz::UTC`], which reproduces
+    /// the previous behaviour explicitly rather than by omission.
     #[must_use]
-    pub fn detect_weekly_schedule(activities: &[Activity]) -> WeeklySchedulePattern {
+    pub fn detect_weekly_schedule(activities: &[Activity], zone: Tz) -> WeeklySchedulePattern {
         if activities.len() < MIN_ACTIVITIES_FOR_PATTERN {
             return Self::empty_schedule_pattern();
         }
@@ -113,11 +124,9 @@ impl PatternDetector {
         let mut hour_counts: HashMap<u32, u32> = HashMap::new();
 
         for activity in activities {
-            let weekday = activity.start_date().weekday();
-            *day_counts.entry(weekday).or_insert(0) += 1;
-
-            let hour = activity.start_date().hour();
-            *hour_counts.entry(hour).or_insert(0) += 1;
+            let local = activity.start_date().with_timezone(&zone);
+            *day_counts.entry(local.weekday()).or_insert(0) += 1;
+            *hour_counts.entry(local.hour()).or_insert(0) += 1;
         }
 
         // Sort days by frequency
