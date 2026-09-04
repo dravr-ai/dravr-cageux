@@ -13,6 +13,7 @@
 
 use dravr_cageux::algorithms::ftp::FtpAlgorithm;
 use dravr_cageux::algorithms::lthr::LthrAlgorithm;
+use dravr_cageux::algorithms::training_load::{TrainingLoadAlgorithm, TssDataPoint};
 use dravr_cageux::algorithms::trimp::TrimpAlgorithm;
 use dravr_cageux::algorithms::vdot::VdotAlgorithm;
 use dravr_cageux::algorithms::vo2max::Vo2maxAlgorithm;
@@ -170,4 +171,108 @@ fn lthr_from_max_hr() {
     };
     let result = algo.estimate_lthr().unwrap();
     assert!((result - 161.5).abs() < 1.0, "LTHR: {result}");
+}
+
+// ============================================================================
+// VO2max — the published formulas, pinned to their sources
+// ============================================================================
+
+#[test]
+fn vo2max_rockport_matches_kline_1987() {
+    // Kline et al. (1987), worked by hand:
+    //   132.853 - 0.0769(70) - 0.3877(40) + 6.315(1) - 3.2649(13) - 0.1565(140)
+    // = 132.853 - 5.383 - 15.508 + 6.315 - 42.4437 - 21.91 = 53.92
+    // A sign flip on the time or heart-rate term lands near 182, which is why
+    // this asserts the value and not merely a physiological floor.
+    let algo = Vo2maxAlgorithm::RockportWalk {
+        weight_kg: 70.0,
+        age: 40,
+        gender: 1,
+        time_seconds: 780.0,
+        heart_rate: 140.0,
+    };
+    let result = algo.estimate_vo2max().unwrap();
+    assert!((result - 53.92).abs() < 0.1, "Rockport VO2max: {result}");
+}
+
+#[test]
+fn vo2max_rockport_falls_with_slower_walk_and_higher_hr() {
+    let base = |secs: f64, hr: f64| Vo2maxAlgorithm::RockportWalk {
+        weight_kg: 70.0,
+        age: 40,
+        gender: 1,
+        time_seconds: secs,
+        heart_rate: hr,
+    };
+    let fast = base(720.0, 130.0).estimate_vo2max().unwrap();
+    let slow = base(900.0, 160.0).estimate_vo2max().unwrap();
+    assert!(
+        slow < fast,
+        "a slower walk at a higher heart rate must estimate lower: fast={fast}, slow={slow}"
+    );
+}
+
+#[test]
+fn vo2max_from_vdot_is_already_ml_per_kg_per_min() {
+    // VDOT is Daniels' economy-adjusted VO2max, already in ml/kg/min. The old
+    // code multiplied by 3.5 (the MET factor) and reported 175 for a VDOT-50
+    // runner — roughly double the highest value ever measured in a human.
+    let result = Vo2maxAlgorithm::FromVdot { vdot: 50.0 }
+        .estimate_vo2max()
+        .unwrap();
+    assert!((result - 50.0).abs() < f64::EPSILON, "VO2max: {result}");
+}
+
+// ============================================================================
+// Training load — the chronic and acute estimates must actually differ
+// ============================================================================
+
+#[test]
+fn kalman_chronic_and_acute_estimates_diverge() {
+    // Both CTL and ATL used to dispatch to the same windowless call, so they
+    // returned the identical number and TSB was identically zero — which bands
+    // every athlete as balanced no matter what they have done. A ramp makes the
+    // acute estimate ride above the chronic one.
+    let now = chrono::Utc::now();
+    let tss_data: Vec<TssDataPoint> = (0..42_i32)
+        .map(|day| TssDataPoint {
+            date: now - chrono::Duration::days(i64::from(41 - day)),
+            tss: f64::from(day).mul_add(3.0, 40.0),
+        })
+        .collect();
+
+    let algo = TrainingLoadAlgorithm::KalmanFilter {
+        ctl_days: 42,
+        atl_days: 7,
+        process_noise: 1.0,
+        measurement_noise: 10.0,
+    };
+
+    let ctl = algo.calculate_ctl(&tss_data).unwrap();
+    let atl = algo.calculate_atl(&tss_data).unwrap();
+
+    assert!(
+        (ctl - atl).abs() > 1.0,
+        "chronic and acute must not collapse to one value: ctl={ctl}, atl={atl}"
+    );
+    assert!(
+        atl > ctl,
+        "on a rising ramp the 7-day estimate must lead the 42-day one: ctl={ctl}, atl={atl}"
+    );
+}
+
+#[test]
+fn kalman_rejects_a_non_positive_window() {
+    let now = chrono::Utc::now();
+    let tss_data = vec![TssDataPoint {
+        date: now,
+        tss: 50.0,
+    }];
+    let algo = TrainingLoadAlgorithm::KalmanFilter {
+        ctl_days: 0,
+        atl_days: 7,
+        process_noise: 1.0,
+        measurement_noise: 10.0,
+    };
+    assert!(algo.calculate_ctl(&tss_data).is_err());
 }

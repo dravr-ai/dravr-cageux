@@ -390,6 +390,8 @@ impl AlgorithmConfig {
                 atl_days: p.training_load_atl_days,
             },
             Ok(TrainingLoadAlgorithm::KalmanFilter { .. }) => TrainingLoadAlgorithm::KalmanFilter {
+                ctl_days: p.training_load_ctl_days,
+                atl_days: p.training_load_atl_days,
                 process_noise: p.training_load_kalman_process_noise,
                 measurement_noise: p.training_load_kalman_measurement_noise,
             },

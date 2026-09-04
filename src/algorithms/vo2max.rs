@@ -39,10 +39,13 @@ struct RockportTestData {
 pub enum Vo2maxAlgorithm {
     /// From Jack Daniels' VDOT
     ///
-    /// Formula: `VO2max = VDOT x 3.5`
+    /// Formula: `VO2max = VDOT`
     ///
-    /// `VDOT` is Jack Daniels' running economy-adjusted `VO2max` measure.
-    /// Multiply by 3.5 to convert to standard ml/kg/min units.
+    /// `VDOT` is Jack Daniels' running economy-adjusted `VO2max` measure and is
+    /// already expressed in ml/kg/min — which is why [`Self::validate_vdot`]
+    /// bounds it to the 30-85 range a measured `VO2max` occupies. No unit
+    /// conversion applies: 3.5 ml/kg/min is one MET, and VDOT is not a MET
+    /// multiple.
     ///
     /// Pros: Accurate for runners, accounts for running economy
     /// Cons: Requires `VDOT` calculation from race performance
@@ -166,7 +169,7 @@ impl Vo2maxAlgorithm {
         match self {
             Self::FromVdot { vdot } => {
                 Self::validate_vdot(*vdot)?;
-                Ok(vdot * 3.5)
+                Ok(*vdot)
             }
             Self::CooperTest { distance_meters } => Self::calculate_cooper(*distance_meters),
             Self::RockportWalk {
@@ -273,17 +276,14 @@ impl Vo2maxAlgorithm {
         #[allow(clippy::cast_precision_loss)]
         let gender_f64 = f64::from(data.gender);
 
-        let vo2max = 132.853
-            - 0.0769_f64.mul_add(
-                data.weight_kg,
-                0.3877_f64.mul_add(
-                    age_f64,
-                    -(6.315_f64.mul_add(
-                        gender_f64,
-                        3.2649_f64.mul_add(time_minutes, 0.1565 * data.heart_rate),
-                    )),
-                ),
-            );
+        // Kline et al. (1987), term for term:
+        //   132.853 - 0.0769*weight - 0.3877*age + 6.315*gender
+        //           - 3.2649*time - 0.1565*HR
+        // Gender is the only additive term; walking slower or finishing with a
+        // higher heart rate both lower the estimate.
+        let body = 0.0769_f64.mul_add(data.weight_kg, 0.3877 * age_f64);
+        let effort = 3.2649_f64.mul_add(time_minutes, 0.1565 * data.heart_rate);
+        let vo2max = 6.315_f64.mul_add(gender_f64, 132.853 - body - effort);
 
         Ok(vo2max.max(20.0))
     }
@@ -422,7 +422,7 @@ impl Vo2maxAlgorithm {
     #[must_use]
     pub const fn formula(&self) -> &'static str {
         match self {
-            Self::FromVdot { .. } => "VO2max = VDOT x 3.5",
+            Self::FromVdot { .. } => "VO2max = VDOT",
             Self::CooperTest { .. } => "VO2max = (distance - 504.9) / 44.73",
             Self::RockportWalk { .. } => {
                 "VO2max = 132.853 - 0.0769xweight - 0.3877xage + 6.315xgender - 3.2649xtime - 0.1565xHR"

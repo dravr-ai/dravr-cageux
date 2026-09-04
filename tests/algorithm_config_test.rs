@@ -120,6 +120,8 @@ fn training_load_selection_injects_window_and_noise_params() {
     assert_eq!(
         cfg.training_load_algorithm(),
         TrainingLoadAlgorithm::KalmanFilter {
+            ctl_days: 35,
+            atl_days: 5,
             process_noise: 2.0,
             measurement_noise: 20.0
         }

@@ -84,7 +84,11 @@ pub enum TrainingLoadAlgorithm {
     /// Pros: Optimal for noisy data, handles gaps well
     /// Cons: Complex, requires tuning noise parameters
     KalmanFilter {
-        /// Process noise (training load variability)
+        /// Chronic Training Load window in days, as a target smoothing horizon
+        ctl_days: i64,
+        /// Acute Training Load window in days, as a target smoothing horizon
+        atl_days: i64,
+        /// Process-noise multiplier applied to the window-derived value
         process_noise: f64,
         /// Measurement noise (TSS measurement error)
         measurement_noise: f64,
@@ -166,9 +170,11 @@ impl TrainingLoadAlgorithm {
             Self::Sma { ctl_days, .. } => Self::calculate_sma(tss_data, *ctl_days),
             Self::Wma { ctl_days, .. } => Self::calculate_wma(tss_data, *ctl_days),
             Self::KalmanFilter {
+                ctl_days,
                 process_noise,
                 measurement_noise,
-            } => Self::calculate_kalman(tss_data, *process_noise, *measurement_noise),
+                ..
+            } => Self::calculate_kalman(tss_data, *ctl_days, *process_noise, *measurement_noise),
         }
     }
 
@@ -197,9 +203,11 @@ impl TrainingLoadAlgorithm {
             Self::Sma { atl_days, .. } => Self::calculate_sma(tss_data, *atl_days),
             Self::Wma { atl_days, .. } => Self::calculate_wma(tss_data, *atl_days),
             Self::KalmanFilter {
+                atl_days,
                 process_noise,
                 measurement_noise,
-            } => Self::calculate_kalman(tss_data, *process_noise, *measurement_noise),
+                ..
+            } => Self::calculate_kalman(tss_data, *atl_days, *process_noise, *measurement_noise),
         }
     }
 
@@ -352,11 +360,25 @@ impl TrainingLoadAlgorithm {
         Ok(wma)
     }
 
-    /// Calculate Kalman Filter estimate
+    /// Calculate Kalman Filter estimate over a target smoothing window
     ///
-    /// Simplified 1D Kalman filter for training load estimation
+    /// Simplified 1D Kalman filter for training load estimation.
+    ///
+    /// `window_days` is what separates a chronic estimate from an acute one. A
+    /// scalar Kalman filter settles to a steady-state gain `K` and from then on
+    /// behaves like an exponential moving average with `alpha = K`, so the
+    /// window is expressed by choosing the process noise that lands `K` on the
+    /// same `alpha = 2 / (N + 1)` the EMA variant uses. Solving the steady-state
+    /// covariance relations for `Q` gives `Q = alpha^2 * R / (1 - alpha)`, which
+    /// is then scaled by the configured `process_noise` multiplier so the tuning
+    /// knob still has meaning; at its default of 1.0 the filter tracks the EMA
+    /// horizon exactly.
+    ///
+    /// Without this the chronic and acute calls are the same computation over
+    /// the same data and TSB is identically zero.
     fn calculate_kalman(
         tss_data: &[TssDataPoint],
+        window_days: i64,
         process_noise: f64,
         measurement_noise: f64,
     ) -> IntelligenceResult<f64> {
@@ -369,6 +391,16 @@ impl TrainingLoadAlgorithm {
                 "Noise parameters must be positive".to_owned(),
             ));
         }
+
+        if window_days < 1 {
+            return Err(IntelligenceError::invalid_input(
+                "Training load window must be at least 1 day".to_owned(),
+            ));
+        }
+
+        let alpha = 2.0 / (window_days as f64 + 1.0);
+        let process_noise =
+            process_noise * alpha.powi(2) * measurement_noise / (1.0 - alpha).max(f64::EPSILON);
 
         let first_date = tss_data[0].date;
         let last_date = tss_data[tss_data.len() - 1].date;
@@ -449,10 +481,14 @@ impl TrainingLoadAlgorithm {
                 )
             }
             Self::KalmanFilter {
+                ctl_days,
+                atl_days,
                 process_noise,
                 measurement_noise,
             } => {
-                format!("Kalman Filter (Q={process_noise:.3}, R={measurement_noise:.3})")
+                format!(
+                    "Kalman Filter (CTL={ctl_days}d, ATL={atl_days}d, Q x{process_noise:.3}, R={measurement_noise:.3})"
+                )
             }
         }
     }
@@ -489,6 +525,8 @@ impl FromStr for TrainingLoadAlgorithm {
                 atl_days: 7,
             }),
             "kalman" | "kalman_filter" => Ok(Self::KalmanFilter {
+                ctl_days: 42,
+                atl_days: 7,
                 process_noise: 1.0,
                 measurement_noise: 10.0,
             }),
