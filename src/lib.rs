@@ -83,10 +83,8 @@ pub mod metrics;
 pub mod metrics_extractor;
 /// Training pattern detection and analysis
 pub mod pattern_detection;
-/// Performance analysis engine (v1)
+/// Performance analysis engine
 pub mod performance_analyzer;
-/// Performance analyzer v2 with improved algorithms
-pub mod performance_analyzer_v2;
 /// Performance prediction and race time estimation
 pub mod performance_prediction;
 /// Statistical analysis and regression

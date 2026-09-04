@@ -16,7 +16,7 @@ use crate::physiological_constants::{
     consistency::CONSISTENCY_SCORE_THRESHOLD,
     frequency_targets::MAX_WEEKLY_FREQUENCY,
     heart_rate::HIGH_INTENSITY_HR_THRESHOLD,
-    hr_estimation::{ASSUMED_MAX_HR, RECOVERY_HR_PERCENTAGE},
+    hr_estimation::RECOVERY_HR_PERCENTAGE,
     intensity_balance::{
         HIGH_INTENSITY_UPPER_LIMIT, LOW_INTENSITY_LOWER_LIMIT, MODERATE_NUTRITION_HR_THRESHOLD,
     },
@@ -43,7 +43,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{naive::Days, Utc};
 
-use crate::models::{Activity, SportType};
+use crate::models::{Activity, MaxHrAlgorithm, SportType};
 use crate::seasonality::{
     seasonal_alternatives, sport_seasonal_suitability, SeasonalContext, SeasonalSuitability,
 };
@@ -83,6 +83,9 @@ pub struct AdvancedRecommendationEngine<S: IntelligenceStrategy = DefaultStrateg
     strategy: S,
     config: RecommendationEngineConfig,
     user_profile: Option<UserFitnessProfile>,
+    /// Age-prediction formula used to derive the athlete's maximum heart rate,
+    /// resolved from the operator's `PIERRE_MAXHR_ALGORITHM` selection.
+    max_hr_algorithm: MaxHrAlgorithm,
 }
 
 impl AdvancedRecommendationEngine {
@@ -98,6 +101,7 @@ impl AdvancedRecommendationEngine {
             strategy: DefaultStrategy::new(config.clone()),
             config: config.recommendation_engine.clone(),
             user_profile: None,
+            max_hr_algorithm: config.algorithms.maxhr_algorithm(),
         }
     }
 }
@@ -111,6 +115,7 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
             strategy,
             config: config.recommendation_engine.clone(),
             user_profile: None,
+            max_hr_algorithm: config.algorithms.maxhr_algorithm(),
         }
     }
 
@@ -121,6 +126,10 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
             strategy,
             config,
             user_profile: None,
+            // This constructor takes only the recommendation-engine slice of the
+            // configuration, so the operator's algorithm selection is not
+            // reachable here; Tanaka is the shipped default.
+            max_hr_algorithm: MaxHrAlgorithm::Tanaka,
         }
     }
 
@@ -135,6 +144,7 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
             strategy: DefaultStrategy::new(config.clone()),
             config: config.recommendation_engine.clone(),
             user_profile: Some(profile),
+            max_hr_algorithm: config.algorithms.maxhr_algorithm(),
         }
     }
 
@@ -143,8 +153,30 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
         self.user_profile = Some(profile);
     }
 
-    /// Analyze training patterns to identify areas for improvement
-    fn analyze_training_patterns(&self, activities: &[Activity]) -> TrainingPatternAnalysis {
+    /// Estimate the athlete's maximum heart rate from their profile.
+    ///
+    /// The ceiling comes from the configured age-prediction formula applied to
+    /// the profile's own age and gender. A profile without a usable age yields
+    /// `None`, and the caller then reports no intensity balance rather than
+    /// classifying sessions against a ceiling nobody measured.
+    fn estimate_max_hr(&self, profile: &UserFitnessProfile) -> Option<f64> {
+        let age = u32::try_from(profile.age?).ok()?;
+        self.max_hr_algorithm
+            .estimate(age, profile.gender.as_deref())
+            .ok()
+    }
+
+    /// Analyze training patterns to identify areas for improvement.
+    ///
+    /// `max_hr` is the athlete's maximum heart rate, used as the ceiling that
+    /// turns the configured intensity and recovery percentages into bpm
+    /// thresholds. When it is `None` the session heart rates cannot be
+    /// classified and the resulting `intensity_balance` is `None`.
+    fn analyze_training_patterns(
+        &self,
+        activities: &[Activity],
+        max_hr: Option<f64>,
+    ) -> TrainingPatternAnalysis {
         let recent_activities: Vec<Activity> = activities
             .iter()
             .filter(|a| {
@@ -160,6 +192,17 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
         let mut _low_intensity_count = 0;
         let mut _total_duration = 0;
 
+        let hr_thresholds = max_hr.map(|ceiling| {
+            let hr_config = &self.config.thresholds;
+            // Safe: a percentage of a heart-rate ceiling is a small positive value (60-220 bpm)
+            let intensity =
+                u32::try_from((hr_config.intensity_threshold * ceiling) as u64).unwrap_or(u32::MAX);
+            // Safe: a percentage of a heart-rate ceiling is a small positive value (60-220 bpm)
+            let recovery =
+                u32::try_from((RECOVERY_HR_PERCENTAGE * ceiling) as u64).unwrap_or(u32::MAX);
+            (intensity, recovery)
+        });
+
         for activity in &recent_activities {
             *sport_frequency
                 .entry(format!("{:?}", activity.sport_type()))
@@ -172,20 +215,9 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
             } // Hours
             _total_duration += duration;
 
-            if let Some(avg_hr) = activity.average_heart_rate() {
-                // Use configurable heart rate thresholds
-                let hr_config = &self.config.thresholds;
-                // Safe: heart rate thresholds are small positive values (80-220 bpm)
-                let intensity_threshold = {
-                    u32::try_from((hr_config.intensity_threshold * ASSUMED_MAX_HR) as u64)
-                        .unwrap_or(u32::MAX)
-                };
-                // Safe: heart rate thresholds are small positive values (60-150 bpm)
-                let recovery_threshold = {
-                    u32::try_from((RECOVERY_HR_PERCENTAGE * ASSUMED_MAX_HR) as u64)
-                        .unwrap_or(u32::MAX)
-                };
-
+            if let (Some(avg_hr), Some((intensity_threshold, recovery_threshold))) =
+                (activity.average_heart_rate(), hr_thresholds)
+            {
                 if avg_hr > intensity_threshold {
                     high_intensity_count += 1;
                 } else if avg_hr < recovery_threshold {
@@ -196,13 +228,11 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
 
         weekly_load /= 4.0; // Average per week
 
-        let intensity_balance = if recent_activities.is_empty() {
-            0.0
+        let intensity_balance = if hr_thresholds.is_none() || recent_activities.is_empty() {
+            None
         } else {
             // Safe: activity count precision loss acceptable for ratio calculations
-            {
-                f64::from(high_intensity_count) / recent_activities.len() as f64
-            }
+            Some(f64::from(high_intensity_count) / recent_activities.len() as f64)
         };
 
         // Use configurable frequency thresholds for consistency scoring
@@ -419,7 +449,11 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
     ) -> Vec<TrainingRecommendation> {
         let mut recommendations = Vec::new();
 
-        if analysis.intensity_balance > HIGH_INTENSITY_UPPER_LIMIT {
+        let Some(intensity_balance) = analysis.intensity_balance else {
+            return recommendations;
+        };
+
+        if intensity_balance > HIGH_INTENSITY_UPPER_LIMIT {
             recommendations.push(TrainingRecommendation {
                 recommendation_type: RecommendationType::Intensity,
                 title: "Add More Easy Training".into(),
@@ -433,7 +467,7 @@ impl<S: IntelligenceStrategy> AdvancedRecommendationEngine<S> {
                     "Focus on conversational pace".into(),
                 ],
             });
-        } else if analysis.intensity_balance < LOW_INTENSITY_LOWER_LIMIT {
+        } else if intensity_balance < LOW_INTENSITY_LOWER_LIMIT {
             recommendations.push(TrainingRecommendation {
                 recommendation_type: RecommendationType::Intensity,
                 title: "Increase Training Intensity".into(),
@@ -655,8 +689,9 @@ impl RecommendationEngineTrait for AdvancedRecommendationEngine {
     ) -> IntelligenceResult<Vec<TrainingRecommendation>> {
         let mut recommendations = Vec::new();
 
-        // Analyze current training patterns
-        let analysis = self.analyze_training_patterns(activities);
+        // Analyze current training patterns against the athlete's own HR ceiling
+        let analysis =
+            self.analyze_training_patterns(activities, self.estimate_max_hr(user_profile));
 
         // Generate different types of recommendations
         recommendations.extend(Self::generate_intensity_recommendations(&analysis));
@@ -1006,7 +1041,9 @@ impl AdvancedRecommendationEngine {
 struct TrainingPatternAnalysis {
     weekly_load_hours: f64,
     sport_diversity: usize,
-    intensity_balance: f64,
+    /// Share of recent sessions above the intensity threshold, or `None` when
+    /// the athlete's maximum heart rate is unknown and nothing can be classified.
+    intensity_balance: Option<f64>,
     consistency_score: f64,
     primary_sport: String,
     training_gaps: Vec<TrainingGap>,

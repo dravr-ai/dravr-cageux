@@ -71,6 +71,27 @@ const DANIELS_B: f64 = 0.182_258;
 /// Jack Daniels' VO2 formula constant term
 const DANIELS_C: f64 = -4.60;
 
+/// Asymptotic fraction of `VO2max` sustained over an arbitrarily long race
+const PERCENT_MAX_ASYMPTOTE: f64 = 0.8;
+
+/// Amplitude of the slow (endurance-fatigue) term of the %`VO2max` relation
+const PERCENT_MAX_SLOW_AMPLITUDE: f64 = 0.189_439_3;
+
+/// Decay rate per minute of the slow term of the %`VO2max` relation
+const PERCENT_MAX_SLOW_RATE: f64 = 0.012_778;
+
+/// Amplitude of the fast (anaerobic-contribution) term of the %`VO2max` relation
+const PERCENT_MAX_FAST_AMPLITUDE: f64 = 0.298_955_8;
+
+/// Decay rate per minute of the fast term of the %`VO2max` relation
+const PERCENT_MAX_FAST_RATE: f64 = 0.193_260_5;
+
+/// Bisection steps used to invert the VDOT relation into a race time.
+///
+/// Sixty halvings exhaust the mantissa of an `f64` bracket, so the result is
+/// the closest representable time rather than a tolerance-limited estimate.
+const PREDICTION_BISECTION_STEPS: u32 = 60;
+
 impl VdotAlgorithm {
     /// Calculate VDOT from race performance
     ///
@@ -179,24 +200,28 @@ impl VdotAlgorithm {
         Ok(vdot)
     }
 
-    /// Calculate percent-max adjustment based on race duration
+    /// Fraction of `VO2max` sustained over a race of the given duration
     ///
-    /// Shorter races use less of VO2 max due to oxygen deficit
-    /// Longer races use less due to accumulated fatigue
+    /// Daniels & Gilbert's continuous relation, with `t` in minutes:
+    ///
+    /// `%max = 0.8 + 0.1894393 x e^(-0.012778 t) + 0.2989558 x e^(-0.1932605 t)`
+    ///
+    /// A short race runs above `VO2max` — the anaerobic contribution carries the
+    /// fraction past 1.0 — while a long one settles toward the 0.8 asymptote as
+    /// fatigue accumulates. Dividing the race `VO2` by this fraction is what
+    /// turns a single performance into a VDOT.
+    ///
+    /// Reference: Daniels, J. (2013). "Daniels' Running Formula" (3rd ed.).
     fn calculate_percent_max_adjustment(time_seconds: f64) -> f64 {
         let time_minutes = time_seconds / 60.0;
 
-        if time_minutes < 5.0 {
-            0.97 // Very short race - oxygen deficit
-        } else if time_minutes < 15.0 {
-            0.99 // 5K range
-        } else if time_minutes < 30.0 {
-            1.00 // 10K-15K range - optimal
-        } else if time_minutes < 90.0 {
-            0.98 // Half marathon range
-        } else {
-            0.95 // Marathon+ range - fatigue accumulation
-        }
+        PERCENT_MAX_SLOW_AMPLITUDE.mul_add(
+            (-PERCENT_MAX_SLOW_RATE * time_minutes).exp(),
+            PERCENT_MAX_FAST_AMPLITUDE.mul_add(
+                (-PERCENT_MAX_FAST_RATE * time_minutes).exp(),
+                PERCENT_MAX_ASYMPTOTE,
+            ),
+        )
     }
 
     /// Calculate VDOT using Riegel power-law formula
@@ -216,53 +241,44 @@ impl VdotAlgorithm {
         Self::calculate_daniels(REFERENCE_DISTANCE, time_10k_equivalent)
     }
 
-    /// Predict race time using Daniels VDOT tables
-    fn predict_time_daniels(vdot: f64, target_distance_meters: f64) -> IntelligenceResult<f64> {
-        // Calculate velocity at VO2 max (reverse of VDOT formula)
-        // vo2 = -4.60 + 0.182258 x v + 0.000104 x v²
-        // Solve quadratic: 0.000104v² + 0.182258v - (vo2 + 4.60) = 0
-
-        let c: f64 = -(vdot + 4.60);
-
-        let discriminant = DANIELS_B.mul_add(DANIELS_B, -(4.0 * DANIELS_A * c));
-        if discriminant < 0.0 {
-            return Err(IntelligenceError::internal(
-                "Invalid VDOT calculation".to_owned(),
-            ));
-        }
-
-        let velocity_max = (-DANIELS_B + discriminant.sqrt()) / (2.0 * DANIELS_A);
-
-        // Calculate race-specific velocity based on distance
-        let race_velocity = Self::calculate_race_velocity(velocity_max, target_distance_meters);
-
-        // Calculate time from velocity
-        let time_seconds = (target_distance_meters / race_velocity) * 60.0;
-
-        Ok(time_seconds)
-    }
-
-    /// Calculate race velocity based on max velocity and distance
+    /// Predict race time by inverting the Daniels VDOT relation
     ///
-    /// Applies fatigue factors for longer distances
-    fn calculate_race_velocity(velocity_max: f64, distance_meters: f64) -> f64 {
-        // Velocity percentages based on distance (Daniels' tables)
-        let velocity_percent = if distance_meters <= 1_500.0 {
-            1.00 // Mile/1500m - approximately VO2max pace
-        } else if distance_meters <= 5_000.0 {
-            0.975 // 5K pace
-        } else if distance_meters <= 10_000.0 {
-            0.95 // 10K pace
-        } else if distance_meters <= 21_097.5 {
-            0.90 // Half marathon pace
-        } else if distance_meters <= 42_195.0 {
-            0.85 // Marathon pace
-        } else {
-            // Ultra distances - further reduction
-            0.80
+    /// [`Self::calculate_daniels`] maps a race to
+    /// `vo2(velocity) / percent_max(time)`. Holding the distance fixed, that
+    /// expression falls monotonically as the time rises, so the prediction is
+    /// the time at which it equals the supplied VDOT. Bisecting over the
+    /// velocity domain the VO2 polynomial is defined on
+    /// (`MIN_VELOCITY`-`MAX_VELOCITY`) makes the prediction the exact inverse
+    /// of the calculation, rather than a second model that could disagree
+    /// with it.
+    fn predict_time_daniels(vdot: f64, target_distance_meters: f64) -> IntelligenceResult<f64> {
+        // Fastest and slowest race times the velocity domain admits.
+        let mut fastest = target_distance_meters * 60.0 / MAX_VELOCITY;
+        let mut slowest = target_distance_meters * 60.0 / MIN_VELOCITY;
+
+        let vdot_at = |time_seconds: f64| -> f64 {
+            let velocity = (target_distance_meters / time_seconds) * 60.0;
+            let vo2 =
+                (DANIELS_A * velocity).mul_add(velocity, DANIELS_B.mul_add(velocity, DANIELS_C));
+            vo2 / Self::calculate_percent_max_adjustment(time_seconds)
         };
 
-        velocity_max * velocity_percent
+        if vdot_at(fastest) < vdot || vdot_at(slowest) > vdot {
+            return Err(IntelligenceError::invalid_input(format!(
+                "VDOT {vdot:.1} has no {target_distance_meters:.0} m race time within the model's velocity range ({MIN_VELOCITY}-{MAX_VELOCITY} m/min)"
+            )));
+        }
+
+        for _ in 0..PREDICTION_BISECTION_STEPS {
+            let midpoint = f64::midpoint(fastest, slowest);
+            if vdot_at(midpoint) > vdot {
+                fastest = midpoint;
+            } else {
+                slowest = midpoint;
+            }
+        }
+
+        Ok(f64::midpoint(fastest, slowest))
     }
 
     /// Predict time using Riegel power-law formula

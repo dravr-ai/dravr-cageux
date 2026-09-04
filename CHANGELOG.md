@@ -1,5 +1,41 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- refactor(performance)!: `performance_analyzer_v2` is deleted — `PerformanceAnalyzerV2`
+  and its result types (`FitnessScore`, `ActivityGoal`, `PerformancePrediction`,
+  `TrainingLoadAnalysis`, `WeeklyLoad`). It was a second 0-100 fitness scorer beside
+  `performance_analyzer::AdvancedPerformanceAnalyzer`, disagreeing with it on every
+  constant (weights 0.5/0.3/0.2 vs 0.4/0.3/0.3, thresholds 75/60 vs 70/40, target
+  weekly activities 4 vs 5, strength-endurance divisor 10 vs 5) and constructed
+  nowhere.
+- refactor(visitor)!: `ZoneTimeCalculator`, `ZoneBoundaries` and
+  `ZoneDistributionResult` are deleted. They banded heart rate as a fraction of max
+  HR, a zone model no caller used and which competed with the zone set the platform
+  actually serves.
+- refactor(config)!: `AlgorithmConfig::ftp`, `::lthr` and `::vo2max` are deleted with
+  their serde defaults and the `PIERRE_FTP_ALGORITHM` / `PIERRE_LTHR_ALGORITHM` /
+  `PIERRE_VO2MAX_ALGORITHM` overrides. No resolver read them, so setting one changed
+  nothing; the algorithms they named take measured test inputs and cannot be chosen
+  by name.
+- `physiological_constants::hr_estimation::ASSUMED_MAX_HR` is deleted.
+
+### Changed
+
+- fix(vdot)!: VDOT uses Daniels & Gilbert's continuous %VO2max relation
+  (`0.8 + 0.1894393 e^(-0.012778 t) + 0.2989558 e^(-0.1932605 t)`) in place of a
+  five-bucket step function, and `predict_time` now inverts that same relation by
+  bisection instead of applying a second table of velocity percentages. A 20:00 5K
+  reads 49.8 rather than 47.5, and predictions land within 2.4% of Daniels'
+  published times for VDOT 50 and 60.
+- fix(recommendations)!: training-intensity classification uses the athlete's own
+  maximum heart rate, derived from their profile age by the configured
+  age-prediction formula, instead of a fixed 180 bpm. `TrainingPatternAnalysis`
+  carries `intensity_balance: Option<f64>`, and a profile without an age gets no
+  intensity verdict rather than one measured against an invented ceiling.
+
 ## [0.7.1] — 2026-09-04
 
 

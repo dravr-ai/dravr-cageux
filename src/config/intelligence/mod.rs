@@ -608,9 +608,6 @@ impl IntelligenceConfig<true> {
         // Algorithm selection overrides
         Self::apply_env_var("PIERRE_TSS_ALGORITHM", &mut self.algorithms.tss)?;
         Self::apply_env_var("PIERRE_MAXHR_ALGORITHM", &mut self.algorithms.maxhr)?;
-        Self::apply_env_var("PIERRE_FTP_ALGORITHM", &mut self.algorithms.ftp)?;
-        Self::apply_env_var("PIERRE_LTHR_ALGORITHM", &mut self.algorithms.lthr)?;
-        Self::apply_env_var("PIERRE_VO2MAX_ALGORITHM", &mut self.algorithms.vo2max)?;
         Self::apply_env_var("PIERRE_TRIMP_ALGORITHM", &mut self.algorithms.trimp)?;
         Self::apply_env_var("PIERRE_VDOT_ALGORITHM", &mut self.algorithms.vdot)?;
         Self::apply_env_var(

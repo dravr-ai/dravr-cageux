@@ -135,6 +135,80 @@ fn vdot_daniels_5k_20min() {
     assert!(result < 55.0, "VDOT: {result}");
 }
 
+/// Daniels' published VDOT for a 20:00 5K is 49.8. Reaching it requires the
+/// continuous %`VO2max` relation: the race VO2 is 47.46 ml/kg/min and only
+/// dividing by %max(20 min) = 0.953 lifts it to the table value.
+#[test]
+fn vdot_daniels_5k_20min_matches_published_table_value() {
+    let result = VdotAlgorithm::Daniels
+        .calculate_vdot(5000.0, 1200.0)
+        .unwrap();
+    assert!(
+        (result - 49.8).abs() < 0.3,
+        "VDOT for a 20:00 5K should be Daniels' 49.8, got {result}"
+    );
+}
+
+/// %`VO2max` varies continuously with duration, so two races at the same velocity
+/// and different durations yield different VDOTs. A duration-bucketed step
+/// function returns one flat value across each bucket and fails this.
+#[test]
+fn vdot_percent_max_varies_within_a_single_duration_bucket() {
+    // Both races run at 250 m/min, 16 min and 25 min — one bucket apiece under
+    // any five-bucket step function covering 15-30 minutes.
+    let sixteen = VdotAlgorithm::Daniels
+        .calculate_vdot(4000.0, 960.0)
+        .unwrap();
+    let twenty_five = VdotAlgorithm::Daniels
+        .calculate_vdot(6250.0, 1500.0)
+        .unwrap();
+    assert!(
+        (sixteen - twenty_five).abs() > 0.3,
+        "same velocity, different duration must give different VDOT: {sixteen} vs {twenty_five}"
+    );
+    assert!(
+        twenty_five > sixteen,
+        "a longer race at the same velocity sustains a smaller share of VO2max, \
+         so it implies the higher VDOT: 16 min {sixteen}, 25 min {twenty_five}"
+    );
+}
+
+/// Prediction inverts the calculation, so a race fed through both returns to
+/// its own time.
+#[test]
+fn vdot_prediction_inverts_the_calculation() {
+    for (distance, time) in [(5000.0, 1200.0), (10_000.0, 2500.0), (42_195.0, 12_000.0)] {
+        let vdot = VdotAlgorithm::Daniels
+            .calculate_vdot(distance, time)
+            .unwrap();
+        let predicted = VdotAlgorithm::Daniels.predict_time(vdot, distance).unwrap();
+        assert!(
+            (predicted - time).abs() < 0.5,
+            "round trip for {distance} m / {time} s returned {predicted} s"
+        );
+    }
+}
+
+/// Predictions track Jack Daniels' published tables for VDOT 50 across the
+/// distances the model covers.
+#[test]
+fn vdot_predictions_track_daniels_published_times() {
+    // Daniels' Running Formula (3rd ed.), VDOT 50.
+    for (distance, reference) in [
+        (5000.0, 1171.0),
+        (10_000.0, 2431.0),
+        (21_097.5, 5400.0),
+        (42_195.0, 11_280.0),
+    ] {
+        let predicted = VdotAlgorithm::Daniels.predict_time(50.0, distance).unwrap();
+        let error_pct = ((predicted - reference).abs() / reference) * 100.0;
+        assert!(
+            error_pct < 3.0,
+            "VDOT 50 over {distance} m predicted {predicted:.0} s against Daniels' {reference:.0} s ({error_pct:.1}%)"
+        );
+    }
+}
+
 #[test]
 fn vdot_rejects_zero_distance() {
     assert!(VdotAlgorithm::Daniels.calculate_vdot(0.0, 1200.0).is_err());

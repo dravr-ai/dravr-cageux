@@ -62,8 +62,9 @@ impl PerformancePredictor {
 
     /// Predict race time from a VDOT value.
     ///
-    /// The VDOT variant is resolved from `config` (default `daniels` VDOT tables;
-    /// `riegel` applies the configured power-law exponent).
+    /// The VDOT variant is resolved from `config` (default `daniels`, which
+    /// inverts Daniels' VO2/%`VO2max` relation; `riegel` applies the configured
+    /// power-law exponent).
     ///
     /// # Arguments
     /// * `vdot` - VDOT value

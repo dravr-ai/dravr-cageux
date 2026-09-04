@@ -88,7 +88,7 @@ cargo run --bin dravr-cageux-mcp -- --transport http --port 3100
 |--------|-------------|
 | `analyzer` | Single-activity analysis with zone distribution and insights |
 | `activity_analyzer` | Advanced contextual analysis with trend comparison |
-| `performance_analyzer_v2` | Multi-activity performance trends and fitness scoring |
+| `performance_analyzer` | Multi-activity performance trends and fitness scoring |
 | `performance_prediction` | Race time prediction using regression models |
 | `pattern_detection` | Hard/easy balance, overtraining signals, volume trends |
 | `recovery_calculator` | Recovery score (0-100) with rest day recommendations |
@@ -163,7 +163,7 @@ dravr-cageux/
 │   ├── algorithms/             # FTP, TSS, TRIMP, VDOT, VO2max, LTHR, MaxHR
 │   ├── types.rs                # Shared analysis types (trends, goals, insights)
 │   ├── analyzer.rs             # Single-activity analysis
-│   ├── performance_analyzer_v2.rs  # Multi-activity performance trends
+│   ├── performance_analyzer.rs # Multi-activity performance trends
 │   ├── recovery_calculator.rs  # Recovery scoring
 │   ├── sleep_analysis.rs       # Sleep quality + HRV
 │   ├── nutrition_calculator.rs # TDEE, BMR, macros

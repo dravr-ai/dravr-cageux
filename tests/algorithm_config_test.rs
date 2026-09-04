@@ -19,6 +19,7 @@ use dravr_cageux::algorithms::{
 use dravr_cageux::config::intelligence::{AlgorithmConfig, AlgorithmParamsConfig};
 use dravr_cageux::models::{ActivityBuilder, MaxHrAlgorithm, SportType};
 use dravr_cageux::training_load::{TrainingLoadCalculator, TssDataPoint};
+use std::collections::BTreeSet;
 
 // ============================================================================
 // Defaults
@@ -44,6 +45,73 @@ fn default_selections_resolve_to_default_variants() {
     assert_eq!(cfg.maxhr_algorithm(), MaxHrAlgorithm::default());
     assert_eq!(cfg.trimp_algorithm(), TrimpAlgorithm::default());
     assert_eq!(cfg.vdot_algorithm(), VdotAlgorithm::default());
+}
+
+#[test]
+fn exposed_selectors_are_exactly_those_that_resolve() {
+    // Every selector string this config serializes must have a resolver that
+    // turns it into an algorithm value, and its shipped default must parse.
+    // A selector with no resolver is settable, persisted, and silently inert —
+    // an operator changes it and nothing happens.
+    let cfg = AlgorithmConfig::default();
+
+    let serialized = serde_yaml::to_value(&cfg).expect("serialize AlgorithmConfig");
+    let mapping = serialized
+        .as_mapping()
+        .expect("AlgorithmConfig is a mapping");
+    let keys: BTreeSet<&str> = mapping
+        .keys()
+        .filter_map(serde_yaml::Value::as_str)
+        .collect();
+
+    let expected: BTreeSet<&str> = [
+        // selectors, one per resolver on AlgorithmConfig
+        "tss",
+        "maxhr",
+        "trimp",
+        "vdot",
+        "training_load",
+        "recovery",
+        // nested tuning, not selectors
+        "tss_fallback",
+        "params",
+    ]
+    .into_iter()
+    .collect();
+
+    assert_eq!(
+        keys, expected,
+        "AlgorithmConfig exposes a field with no resolver; add the resolver or drop the field"
+    );
+
+    // Each shipped default resolves to a concrete variant rather than falling
+    // back with a warning.
+    assert!(cfg.tss.parse::<TssAlgorithm>().is_ok(), "tss: {}", cfg.tss);
+    assert!(
+        cfg.maxhr.parse::<MaxHrAlgorithm>().is_ok(),
+        "maxhr: {}",
+        cfg.maxhr
+    );
+    assert!(
+        cfg.trimp.parse::<TrimpAlgorithm>().is_ok(),
+        "trimp: {}",
+        cfg.trimp
+    );
+    assert!(
+        cfg.vdot.parse::<VdotAlgorithm>().is_ok(),
+        "vdot: {}",
+        cfg.vdot
+    );
+    assert!(
+        cfg.training_load.parse::<TrainingLoadAlgorithm>().is_ok(),
+        "training_load: {}",
+        cfg.training_load
+    );
+    assert!(
+        cfg.recovery.parse::<RecoveryAggregationAlgorithm>().is_ok(),
+        "recovery: {}",
+        cfg.recovery
+    );
 }
 
 // ============================================================================

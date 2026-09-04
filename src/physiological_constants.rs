@@ -423,14 +423,8 @@ pub mod milestones {
     ];
 }
 
-/// Maximum heart rate estimation constants
-///
-/// Reference: Tanaka, H., Monahan, K.D., & Seals, D.R. (2001)
+/// Heart rate thresholds expressed as a share of an athlete's maximum heart rate
 pub mod hr_estimation {
-    /// Assumed maximum heart rate for calculations (age-independent baseline)
-    /// Used when individual max HR is unknown
-    pub const ASSUMED_MAX_HR: f64 = 180.0;
-
     /// Recovery heart rate percentage (70% of max HR)
     /// Used for intensity calculations
     pub const RECOVERY_HR_PERCENTAGE: f64 = 0.7;

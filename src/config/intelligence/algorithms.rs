@@ -1,5 +1,5 @@
 // ABOUTME: Algorithm selection configuration for fitness calculations
-// ABOUTME: Configures TSS, MaxHR, FTP, LTHR, and VO2max algorithm implementations
+// ABOUTME: Configures TSS, MaxHR, TRIMP, VDOT, training-load and recovery algorithm implementations
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
@@ -11,11 +11,18 @@
 //!
 //! # Algorithm Types
 //!
+//! Every selector here has a resolver on [`AlgorithmConfig`] that turns the
+//! configured string into the algorithm value the calculation runs. Algorithms
+//! whose variants carry measured test inputs (FTP, LTHR, `VO2max`) cannot be
+//! chosen by name and are therefore not configured here — the caller builds the
+//! variant it has data for.
+//!
 //! - **TSS**: Training Stress Score calculation (`avg_power`, `normalized_power`, `hybrid`)
 //! - **`MaxHR`**: Maximum heart rate estimation (`fox`, `tanaka`, `nes`, `gulati`)
-//! - **FTP**: Functional Threshold Power estimation
-//! - **LTHR**: Lactate Threshold Heart Rate estimation
-//! - **`VO2max`**: Maximum oxygen uptake estimation
+//! - **TRIMP**: Training Impulse calculation (`bannister_male`, `lucia_banded`, `hybrid`, ...)
+//! - **VDOT**: Running performance calculation (`daniels`, `riegel`, `hybrid`)
+//! - **Training load**: CTL/ATL smoothing (`ema`, `sma`, `wma`, `kalman`)
+//! - **Recovery**: Recovery score aggregation (`weighted_average`, `geometric_mean`, ...)
 //!
 //! # Configuration Methods
 //!
@@ -44,18 +51,6 @@ pub struct AlgorithmConfig {
     /// Max HR estimation algorithm: `fox`, `tanaka`, `nes`, or `gulati`
     #[serde(default = "default_maxhr_algorithm")]
     pub maxhr: String,
-
-    /// FTP estimation algorithm: `20min_test`, `from_vo2max`, `ramp_test`, etc.
-    #[serde(default = "default_ftp_algorithm")]
-    pub ftp: String,
-
-    /// LTHR estimation algorithm: `from_maxhr`, `from_30min`, etc.
-    #[serde(default = "default_lthr_algorithm")]
-    pub lthr: String,
-
-    /// `VO2max` estimation algorithm: `from_vdot`, `cooper_test`, etc.
-    #[serde(default = "default_vo2max_algorithm")]
-    pub vo2max: String,
 
     /// TRIMP calculation algorithm: `bannister_male`, `bannister_female`,
     /// `edwards_simplified`, `lucia_banded`, or `hybrid`
@@ -253,21 +248,6 @@ fn default_maxhr_algorithm() -> String {
     "tanaka".to_owned()
 }
 
-/// Default FTP algorithm (`from_vo2max` as most accessible)
-fn default_ftp_algorithm() -> String {
-    "from_vo2max".to_owned()
-}
-
-/// Default LTHR algorithm (`from_maxhr` as most common)
-fn default_lthr_algorithm() -> String {
-    "from_maxhr".to_owned()
-}
-
-/// Default `VO2max` algorithm (`from_vdot` as most validated)
-fn default_vo2max_algorithm() -> String {
-    "from_vdot".to_owned()
-}
-
 /// Default TRIMP algorithm (`hybrid` auto-selects best method per available data)
 fn default_trimp_algorithm() -> String {
     "hybrid".to_owned()
@@ -293,9 +273,6 @@ impl Default for AlgorithmConfig {
         Self {
             tss: default_tss_algorithm(),
             maxhr: default_maxhr_algorithm(),
-            ftp: default_ftp_algorithm(),
-            lthr: default_lthr_algorithm(),
-            vo2max: default_vo2max_algorithm(),
             trimp: default_trimp_algorithm(),
             vdot: default_vdot_algorithm(),
             training_load: default_training_load_algorithm(),

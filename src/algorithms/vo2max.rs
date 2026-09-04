@@ -34,6 +34,13 @@ struct RockportTestData {
 /// - Cooper, K.H. (1968). "A means of assessing maximal oxygen intake." *JAMA*, 203(3), 201-204.
 /// - Kline, G.M., et al. (1987). "Estimation of `VO2max` from a one-mile track walk." *Medicine & Science in Sports & Exercise*, 19(3), 253-259.
 /// - Åstrand, P.O., & Ryhming, I. (1954). "A nomogram for calculation of aerobic capacity." *Journal of Applied Physiology*, 7(2), 218-221.
+///
+/// LIMITATION(registre#265): `Vo2maxAlgorithm` has no production consumer. Every
+/// variant is driven by a measured field test — a 12-minute track run, a timed
+/// mile walk with post-walk heart rate, steady-state ergometer watts — and no
+/// provider capture path supplies those inputs. Production `VO2max` is the value
+/// the athlete enters through the physiology profile, so these estimators serve
+/// callers that hold test data without competing with that value.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Vo2maxAlgorithm {
