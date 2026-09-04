@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.3] — 2026-09-04
+
+### Other
+
+- docs(vo2max): the estimators have a capture path now, not a limitation
+
+
+
 ## [0.7.2] — 2026-09-04
 
 
