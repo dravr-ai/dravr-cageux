@@ -9,6 +9,7 @@ use crate::error::{IntelligenceError, IntelligenceResult};
 use crate::types::{TrendDataPoint, TrendDirection};
 use serde::{Deserialize, Serialize};
 use std::cmp::{min, Ordering};
+use std::f64::consts::FRAC_2_PI;
 
 /// Complete linear regression analysis results
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,11 +155,14 @@ impl StatisticalAnalyzer {
             0.0
         };
 
-        // Calculate p-value for slope significance (simplified t-test)
+        // Calculate p-value for slope significance (two-tailed t-test on the slope)
         let p_value = if degrees_of_freedom > 0 && standard_error > 0.0 {
             let se_slope = standard_error / (n * mean_x).mul_add(-mean_x, sum_xx).sqrt();
             let t_stat = slope / se_slope;
-            Some(Self::t_test_p_value(t_stat.abs(), degrees_of_freedom))
+            Some(Self::student_t_two_tailed_p_value(
+                t_stat,
+                degrees_of_freedom,
+            ))
         } else {
             None
         };
@@ -310,46 +314,51 @@ impl StatisticalAnalyzer {
         }
     }
 
-    /// Simplified t-test p-value calculation (two-tailed)
-    fn t_test_p_value(t_stat: f64, df: usize) -> f64 {
-        // LIMITATION(registre#16): approximates the t-distribution by mapping
-        // the t statistic to a z-equivalent and evaluating the normal CDF —
-        // accurate for large df, increasingly loose below df ≈ 30. The
-        // registered fix is a proper Student's t CDF (regularized incomplete
-        // beta function).
-
+    /// Two-tailed p-value of a t statistic under Student's t distribution
+    ///
+    /// Evaluates `P(|T| > t)` exactly for integer degrees of freedom with the
+    /// finite series of Abramowitz & Stegun 26.7.3 (odd df) and 26.7.4 (even
+    /// df). The tail is exact at every sample size, including the handful of
+    /// weekly blocks a trend is judged on, where the heavier tails of the t
+    /// distribution decide whether a slope counts as significant. Zero
+    /// degrees of freedom carry no information about the residual variance,
+    /// so the p-value is 1.
+    #[must_use]
+    pub fn student_t_two_tailed_p_value(t_stat: f64, df: usize) -> f64 {
         if df == 0 {
             return 1.0;
         }
 
-        // Very rough approximation based on normal distribution
-        // This is not mathematically rigorous but provides reasonable estimates
-        let z_equivalent = t_stat / (1.0 + t_stat * t_stat / (4.0 * df as f64)).sqrt();
+        let t = t_stat.abs();
+        let nu = df as f64;
+        // With θ = atan(t / √ν): cos²θ = ν / (ν + t²), sinθ = t / √(ν + t²).
+        let nu_plus_t_sq = t.mul_add(t, nu);
+        let cos_sq = nu / nu_plus_t_sq;
+        let sin = t / nu_plus_t_sq.sqrt();
 
-        // Two-tailed test
-        2.0 * (1.0 - Self::standard_normal_cdf(z_equivalent.abs()))
-    }
-
-    /// Standard normal cumulative distribution function approximation
-    fn standard_normal_cdf(x: f64) -> f64 {
-        // Abramowitz and Stegun approximation
-        let x = x.abs();
-        let t = 1.0 / 0.231_641_9f64.mul_add(x, 1.0);
-        let poly = t.mul_add(
-            t.mul_add(
-                t.mul_add(t.mul_add(1.330_274_429, -1.821_255_978), 1.781_477_937),
-                -0.356_563_782,
-            ),
-            0.319_381_530,
-        );
-        // Use mul_add for optimal floating point operation: x * x * -0.5
-        let cdf = (0.398_942_3 * (x.mul_add(x, 0.0) * -0.5).exp()).mul_add(-poly, 1.0);
-
-        if x >= 0.0 {
-            cdf
+        // A(t|ν) = P(|T| <= t), summed from the series' leading term outward.
+        let central = if df.is_multiple_of(2) {
+            // sinθ · Σ_{k=0}^{ν/2-1} [(1·3···(2k-1)) / (2·4···2k)] cos^{2k}θ
+            let mut term = 1.0;
+            let mut sum = 0.0;
+            for k in 1..=(df / 2) {
+                sum += term;
+                term *= (2 * k - 1) as f64 / (2 * k) as f64 * cos_sq;
+            }
+            sin * sum
         } else {
-            1.0 - cdf
-        }
+            // (2/π) · (θ + sinθ · Σ_{k=0}^{(ν-3)/2} [(2·4···2k) / (1·3···(2k+1))] cos^{2k+1}θ)
+            let theta = (t / nu.sqrt()).atan();
+            let mut term = cos_sq.sqrt();
+            let mut sum = 0.0;
+            for k in 1..=((df - 1) / 2) {
+                sum += term;
+                term *= (2 * k) as f64 / (2 * k + 1) as f64 * cos_sq;
+            }
+            FRAC_2_PI * sin.mul_add(sum, theta)
+        };
+
+        (1.0 - central).clamp(0.0, 1.0)
     }
 
     /// Calculate confidence intervals for trend predictions
