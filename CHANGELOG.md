@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.4] — 2026-09-04
+
+### Fixed
+
+- fix(stats): the t-test p-value comes from Student's t distribution
+
+
+
 ## [0.7.3] — 2026-09-04
 
 ### Other
