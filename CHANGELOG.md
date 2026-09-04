@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.7.2] — 2026-09-04
+
+
+
 ## [Unreleased]
 
 ### Removed
