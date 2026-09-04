@@ -102,6 +102,8 @@ pub mod visitor;
 pub mod goal_engine;
 /// Nutrition needs calculation and meal planning
 pub mod nutrition_calculator;
+/// Periodization kernel — training catalogue flavours, skeletons, selection and workout templates
+pub mod periodization;
 /// Recipe management with training-aware suggestions
 pub mod recipes;
 /// Training recommendation generation
