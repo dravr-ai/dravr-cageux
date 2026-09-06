@@ -61,7 +61,7 @@ where
 }
 
 /// Sleep quality score result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SleepQualityScore {
     /// Overall sleep quality score (0-100)
     pub overall_score: f64,
@@ -86,7 +86,7 @@ pub struct SleepQualityScore {
 }
 
 /// Sleep quality category
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SleepQualityCategory {
     /// Excellent sleep quality (>8 hours, high efficiency)
@@ -136,7 +136,7 @@ pub struct SleepData {
 }
 
 /// HRV trend analysis result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HrvTrendAnalysis {
     /// Current HRV RMSSD value (ms)
     pub current_rmssd: f64,
@@ -161,7 +161,7 @@ pub struct HrvTrendAnalysis {
 }
 
 /// HRV-based recovery status
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum HrvRecoveryStatus {
     /// Fully recovered (HRV above baseline)
@@ -175,7 +175,7 @@ pub enum HrvRecoveryStatus {
 }
 
 /// HRV trend direction
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum HrvTrend {
     /// HRV is improving over time

@@ -41,7 +41,7 @@ struct RecoveryRecommendations {
 }
 
 /// Holistic recovery score combining multiple factors
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RecoveryScore {
     /// Overall recovery score (0-100)
     pub overall_score: f64,
@@ -75,7 +75,7 @@ pub struct RecoveryScore {
 }
 
 /// Data completeness indicator for recovery scoring
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum DataCompleteness {
     /// All data sources available (TSB + Sleep + HRV)
@@ -87,7 +87,7 @@ pub enum DataCompleteness {
 }
 
 /// Recovery score components
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RecoveryComponents {
     /// TSB-based recovery score (0-100)
     pub tsb_score: f64,
@@ -103,7 +103,7 @@ pub struct RecoveryComponents {
 }
 
 /// Recovery category classification
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RecoveryCategory {
     /// Excellent recovery (low fatigue, ready for high intensity)
@@ -117,7 +117,7 @@ pub enum RecoveryCategory {
 }
 
 /// Training readiness based on recovery
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TrainingReadiness {
     /// Ready for hard/intense training
@@ -131,7 +131,7 @@ pub enum TrainingReadiness {
 }
 
 /// Rest day recommendation with detailed reasoning
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RestDayRecommendation {
     /// Whether rest is recommended
     pub rest_recommended: bool,
