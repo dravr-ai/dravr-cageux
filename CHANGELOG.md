@@ -13,6 +13,24 @@
 
 
 
+## [0.8.3] — NEVER RELEASED, DO NOT PIN
+
+`v0.8.3` exists as a **git tag only**. There is no release, and the tag is on no
+branch: `git merge-base --is-ancestor v0.8.3 origin/main` returns non-zero.
+
+The Release run that created it (34047973058, 2026-09-06) failed. `git push origin
+main --tags` pushes refs independently, so when the branch push was rejected
+non-fast-forward — main had moved while the run sat queued — **the tag push had
+already succeeded**. The tag therefore points at a bump commit built on `586a637`,
+missing `003a181` which is on main.
+
+Pinning it resolves, compiles and tests cleanly while silently holding a fork. That
+is the danger: nothing fails. `0.9.0` is the release that carries everything
+`0.8.3` was meant to, plus what main gained while it queued.
+
+The tag is deliberately not deleted: deleting tags on a shared repository is
+destructive and cannot be proven safe. Use `0.9.0` or later.
+
 ## [0.8.2] — 2026-09-06
 
 
