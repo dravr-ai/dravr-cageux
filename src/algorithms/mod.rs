@@ -1,5 +1,5 @@
 // ABOUTME: Algorithm abstraction layer enabling pluggable calculation methods for fitness intelligence
-// ABOUTME: Provides enum-based dispatch for TSS, TRIMP, MaxHR, and statistical analysis algorithms
+// ABOUTME: Provides enum-based dispatch for TSS, TRIMP, MaxHR, lactate-threshold and statistical analysis algorithms
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 dravr.ai
@@ -33,6 +33,8 @@
 
 /// Functional Threshold Power (FTP) calculation algorithms
 pub mod ftp;
+/// Lactate step-test analysis (LT1 / LT2 by log-log, Dmax, modified Dmax, OBLA)
+pub mod lactate;
 /// Lactate Threshold Heart Rate (LTHR) estimation algorithms
 pub mod lthr;
 /// Maximum Heart Rate (`MaxHR`) calculation methods
@@ -54,6 +56,8 @@ pub mod vo2max;
 
 /// FTP (Functional Threshold Power) calculation algorithm
 pub use ftp::FtpAlgorithm;
+/// Graded lactate step test and the thresholds it yields
+pub use lactate::{LactateStepTest, LactateThresholds};
 /// LTHR (Lactate Threshold Heart Rate) estimation algorithm
 pub use lthr::LthrAlgorithm;
 /// Maximum heart rate calculation algorithm
