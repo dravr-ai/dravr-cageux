@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// This enum covers the most common fitness activities across all providers.
 /// The `Other` variant handles provider-specific activity types that don't
 /// map to the standard categories.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SportType {
     /// Running activity

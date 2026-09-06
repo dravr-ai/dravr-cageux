@@ -7,7 +7,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![allow(missing_docs)]
 
-//! These twelve types are returned whole to callers that serialize them
+//! These thirteen types are returned whole to callers that serialize them
 //! straight onto a protocol wire — the platform's `analyze_sleep_quality`,
 //! `calculate_recovery_score` and `suggest_rest_day` MCP tools do exactly
 //! that, and MCP requires a tool declaring an `outputSchema` to answer with
@@ -18,6 +18,7 @@
 //! fields that are actually on the wire, because a schema that derives but
 //! describes nothing would satisfy the compiler and fail the caller.
 
+use dravr_cageux::models::sport::SportType;
 use dravr_cageux::recovery_calculator::{
     DataCompleteness, RecoveryCategory, RecoveryComponents, RecoveryScore, RestDayRecommendation,
     TrainingReadiness,
@@ -199,6 +200,37 @@ fn the_enum_schemas_list_the_variants_as_they_are_serialized() {
             "{name}'s schema must list the variants as they serialize"
         );
     }
+}
+
+/// `SportType` has an `Other(String)` variant, so its schema is not a plain
+/// list of names.
+///
+/// The named variants derive `const` arms and `Other` derives an object arm —
+/// which is what the platform's `set_physiology` reply needs to describe,
+/// since an athlete's primary sport can be a provider-specific string no
+/// enum anticipated.
+#[test]
+fn the_sport_type_schema_covers_the_open_variant_too() {
+    let schema = serde_json::to_value(schemars::schema_for!(SportType)).unwrap();
+    let arms = schema
+        .get("oneOf")
+        .and_then(|v| v.as_array())
+        .unwrap_or_else(|| panic!("SportType derives a list of arms: {schema:#}"));
+    let names: Vec<String> = arms
+        .iter()
+        .filter_map(|a| a.get("const")?.as_str().map(ToOwned::to_owned))
+        .collect();
+    for expected in ["run", "ride", "swim"] {
+        assert!(
+            names.contains(&expected.to_owned()),
+            "SportType must list {expected} as it serializes: {names:?}"
+        );
+    }
+    assert!(
+        arms.len() > names.len(),
+        "SportType has an open variant, so its schema must carry an arm that is not a const: \
+         {arms:#?}"
+    );
 }
 
 /// A derived schema is only useful if the payload the crate produces passes
