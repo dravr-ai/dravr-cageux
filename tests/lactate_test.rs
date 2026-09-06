@@ -8,8 +8,8 @@
 
 use dravr_cageux::algorithms::lactate::{
     LactateIntensityUnit, LactateStage, LactateStepTest, LactateThresholdMethod,
-    LactateThresholdPoint, LactateThresholds, ThresholdOutcome, BAND_TABLE_MMOL, MIN_STAGES,
-    OBLA_MMOL,
+    LactateThresholdPoint, LactateThresholds, ThresholdOutcome, BAND_TABLE_MMOL, MAX_STAGES,
+    MIN_STAGES, OBLA_MMOL,
 };
 use dravr_cageux::error::IntelligenceError;
 
@@ -406,6 +406,56 @@ fn fewer_than_four_stages_are_refused() {
         }
         other => panic!("expected InsufficientData, got {other:?}"),
     }
+}
+
+#[test]
+fn more_stages_than_any_protocol_runs_are_refused_before_the_quadratic_search() {
+    // The log-log search fits a regression pair at every split, so its cost is
+    // quadratic in the stage count. The bound is what keeps one call from
+    // spending minutes of CPU; it must fire on the count, before any fitting.
+    let stages: Vec<LactateStage> = (0..=MAX_STAGES)
+        .map(|i| {
+            stage(
+                100.0 + f64::from(i as u32),
+                f64::from(i as u32).mul_add(0.1, 1.0),
+                None,
+            )
+        })
+        .collect();
+    assert_eq!(stages.len(), MAX_STAGES + 1);
+    match (LactateStepTest {
+        unit: LactateIntensityUnit::Watts,
+        stages,
+    })
+    .analyze()
+    {
+        Err(IntelligenceError::InvalidInput { field, reason }) => {
+            assert_eq!(field, "stages");
+            assert!(reason.contains(&MAX_STAGES.to_string()), "{reason}");
+            assert!(reason.contains(&(MAX_STAGES + 1).to_string()), "{reason}");
+        }
+        other => panic!("expected InvalidInput, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_test_at_exactly_the_stage_ceiling_is_analysed() {
+    let stages: Vec<LactateStage> = (0..MAX_STAGES)
+        .map(|i| {
+            stage(
+                100.0 + f64::from(i as u32),
+                f64::from(i as u32).mul_add(0.1, 1.0),
+                None,
+            )
+        })
+        .collect();
+    let result = (LactateStepTest {
+        unit: LactateIntensityUnit::Watts,
+        stages,
+    })
+    .analyze()
+    .expect("the ceiling itself is accepted");
+    assert_eq!(result.stage_count, MAX_STAGES);
 }
 
 #[test]

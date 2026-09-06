@@ -29,8 +29,8 @@
 //! the protocol cannot support it — lactate that never reaches 4.0, a curve
 //! whose farthest point from the chord sits on an endpoint, segments that do
 //! not intersect — instead of substituting a rule of thumb. The analysis
-//! refuses fewer than four stages or an intensity that does not increase from
-//! stage to stage.
+//! refuses fewer than four stages, more than [`MAX_STAGES`], or an intensity
+//! that does not increase from stage to stage.
 //!
 //! # References
 //!
@@ -59,6 +59,17 @@ use serde::{Deserialize, Serialize};
 /// The fewest stages any of the constructs can be fitted on: a cubic has four
 /// coefficients, and the log-log split needs two points on each side.
 pub const MIN_STAGES: usize = 4;
+
+/// The most stages a graded test is accepted with.
+///
+/// A step test is a handful of stages — four to eight is typical and the
+/// longest ramp protocols run to about fifteen, because each stage costs the
+/// athlete three to five minutes and a finger prick. Fifty is far past any
+/// real protocol, and the ceiling matters: the log-log search fits a
+/// regression pair at every split, so its cost grows with the square of the
+/// stage count. Without a bound, a caller that sends tens of thousands of
+/// stages spends minutes of CPU inside one call.
+pub const MAX_STAGES: usize = 50;
 
 /// The fixed blood-lactate concentration of the OBLA convention, in mmol/L.
 pub const OBLA_MMOL: f64 = 4.0;
@@ -298,6 +309,14 @@ impl EffortSeries {
         let actual = test.stages.len();
         if actual < MIN_STAGES {
             return Err(IntelligenceError::insufficient_data(MIN_STAGES, actual));
+        }
+        if actual > MAX_STAGES {
+            return Err(IntelligenceError::invalid_input_field(
+                "stages",
+                format!(
+                    "a graded step test runs at most {MAX_STAGES} stages; got {actual}. Send the test's own stages, not a time series"
+                ),
+            ));
         }
         let (min_intensity, max_intensity) = test.unit.range();
         let mut efforts = Vec::with_capacity(actual);
@@ -581,6 +600,8 @@ impl LactateStepTest {
     ///
     /// - [`IntelligenceError::InsufficientData`] with fewer than
     ///   [`MIN_STAGES`] stages.
+    /// - [`IntelligenceError::InvalidInput`] with more than [`MAX_STAGES`]
+    ///   stages, which no real protocol reaches and whose cost is quadratic.
     /// - [`IntelligenceError::ValueOutOfRange`] for an intensity, lactate or
     ///   heart rate outside what a human and a portable meter produce.
     /// - [`IntelligenceError::InvalidInput`] when a stage is not harder than the
