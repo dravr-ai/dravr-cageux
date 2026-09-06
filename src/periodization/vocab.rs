@@ -414,7 +414,106 @@ vocab_enum! {
     }
 }
 
+vocab_enum! {
+    /// Years of structured training behind the athlete (python `VOCAB["training_age"]`).
+    TrainingAge {
+        /// A first season of structured training.
+        Novice => "novice",
+        /// Training consistently, without a competitive history.
+        Recreational => "recreational",
+        /// Several seasons of structured work.
+        Trained => "trained",
+        /// Competitive at a national level or above.
+        Elite => "elite",
+    }
+}
+
+vocab_enum! {
+    /// How much runway is left to the goal (python `VOCAB["weeks_to_goal"]`).
+    WeeksToGoal {
+        /// Under eight weeks.
+        Under8 => "under_8",
+        /// Eight to sixteen weeks.
+        From8To16 => "from_8_to_16",
+        /// More than sixteen weeks.
+        Over16 => "over_16",
+    }
+}
+
+vocab_enum! {
+    /// How fast the athlete recovers — the trigger for masters-style loading,
+    /// which is recovery-driven and never age-driven (python `VOCAB["recovery_speed"]`).
+    RecoverySpeed {
+        /// Recovers quickly between hard days.
+        Fast => "fast",
+        /// The usual forty-eight hours.
+        Typical => "typical",
+        /// Needs longer; the flavour's recovery-limited caps apply.
+        Limited => "limited",
+    }
+}
+
+vocab_enum! {
+    /// Injury history (python `VOCAB["injury_load"]`).
+    InjuryLoad {
+        /// Nothing in the last year.
+        None => "none",
+        /// An injury within the last twelve months.
+        Last12Months => "last_12_months",
+    }
+}
+
+vocab_enum! {
+    /// How much structured interval work the athlete has behind them
+    /// (python `VOCAB["interval_experience"]`).
+    IntervalExperience {
+        /// No structured intervals.
+        None => "none",
+        /// One season of intervals.
+        Some => "some",
+        /// Two or more seasons.
+        TwoSeasons => "two_seasons",
+    }
+}
+
+vocab_enum! {
+    /// The sports the athlete trains (python `VOCAB["sport_mix"]`).
+    SportMix {
+        /// Running only.
+        Running => "running",
+        /// Cycling only.
+        Cycling => "cycling",
+        /// Swim, bike and run.
+        Triathlon => "triathlon",
+        /// Swimming only.
+        Swimming => "swimming",
+        /// Several sports without a triathlon goal.
+        Mixed => "mixed",
+    }
+}
+
+vocab_enum! {
+    /// Where in the season the athlete stands (python `VOCAB["season_phase"]`).
+    SeasonPhase {
+        /// Between seasons.
+        OffSeason => "off_season",
+        /// Building the aerobic base.
+        Base => "base",
+        /// Sharpening toward the first goal.
+        PreCompetition => "pre_competition",
+        /// Racing.
+        Competition => "competition",
+    }
+}
+
 vocab_names!(HOURS_TIER_VALUES, HoursTier);
+vocab_names!(TRAINING_AGE_VALUES, TrainingAge);
+vocab_names!(WEEKS_TO_GOAL_VALUES, WeeksToGoal);
+vocab_names!(RECOVERY_SPEED_VALUES, RecoverySpeed);
+vocab_names!(INJURY_LOAD_VALUES, InjuryLoad);
+vocab_names!(INTERVAL_EXPERIENCE_VALUES, IntervalExperience);
+vocab_names!(SPORT_MIX_VALUES, SportMix);
+vocab_names!(SEASON_PHASE_VALUES, SeasonPhase);
 vocab_names!(EVENT_CLASS_VALUES, EventClass);
 vocab_names!(MEASUREMENT_VALUES, Measurement);
 
@@ -424,15 +523,15 @@ impl InputDimension {
     pub const fn allowed_values(self) -> &'static [&'static str] {
         match self {
             Self::HoursTier => &HOURS_TIER_VALUES,
-            Self::TrainingAge => &["novice", "recreational", "trained", "elite"],
+            Self::TrainingAge => &TRAINING_AGE_VALUES,
             Self::EventClass => &EVENT_CLASS_VALUES,
-            Self::WeeksToGoal => &["under_8", "from_8_to_16", "over_16"],
+            Self::WeeksToGoal => &WEEKS_TO_GOAL_VALUES,
             Self::Measurement => &MEASUREMENT_VALUES,
-            Self::RecoverySpeed => &["fast", "typical", "limited"],
-            Self::InjuryLoad => &["none", "last_12_months"],
-            Self::IntervalExperience => &["none", "some", "two_seasons"],
-            Self::SportMix => &["running", "cycling", "triathlon", "swimming", "mixed"],
-            Self::SeasonPhase => &["off_season", "base", "pre_competition", "competition"],
+            Self::RecoverySpeed => &RECOVERY_SPEED_VALUES,
+            Self::InjuryLoad => &INJURY_LOAD_VALUES,
+            Self::IntervalExperience => &INTERVAL_EXPERIENCE_VALUES,
+            Self::SportMix => &SPORT_MIX_VALUES,
+            Self::SeasonPhase => &SEASON_PHASE_VALUES,
         }
     }
 }

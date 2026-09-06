@@ -54,6 +54,10 @@ use thiserror::Error;
 pub mod flavour;
 /// The closed intensity grammar a coach's zone labels resolve through.
 pub mod intensity;
+/// Laying a season skeleton onto a calendar.
+pub mod layout;
+/// The profile-to-flavour rule that reads the selection table.
+pub mod rule;
 /// The profile-to-flavour selection table.
 pub mod selection;
 /// Whole-number deserializers for integer fields that arrive as `480.0`.
@@ -69,16 +73,22 @@ pub use flavour::{
     Flavour, FlavourPrerequisites, HardSessionCap, ReadinessRule, SessionsTierCap, SpacingHours,
 };
 pub use intensity::RelativeIntensity;
+pub use layout::{build_skeleton, LaidPhase, SeasonLayout};
+pub use rule::{
+    select_flavour, Confidence, ExcludedFlavour, FlavourInputs, FlavourVerdict, Reason,
+    ScoredFlavour,
+};
 pub use selection::{FlavourExclusion, FlavourWeight, SelectionRow, SelectionTable};
 pub use skeleton::{
     MultiPeakRule, PhaseLength, SkeletonCarrier, SkeletonPhase, SkeletonTemplate, StrengthPhase,
     TaperRule,
 };
 pub use vocab::{
-    Contraindication, DaysRange, EventClass, EvidenceTier, FlavourFamily, HoursTier,
-    InputDimension, LoadingPattern, LoadingPatternParseError, LoadingPatterns, Measurement,
-    Modifier, ParamRange, PhaseKind, ProgressionLever, ReadinessLevel, RpeRange, Sequencing, Share,
-    StrengthGoal, TidTarget, WorkoutPurpose,
+    Contraindication, DaysRange, EventClass, EvidenceTier, FlavourFamily, HoursTier, InjuryLoad,
+    InputDimension, IntervalExperience, LoadingPattern, LoadingPatternParseError, LoadingPatterns,
+    Measurement, Modifier, ParamRange, PhaseKind, ProgressionLever, ReadinessLevel, RecoverySpeed,
+    RpeRange, SeasonPhase, Sequencing, Share, SportMix, StrengthGoal, TidTarget, TrainingAge,
+    WeeksToGoal, WorkoutPurpose,
 };
 pub use workout::{
     FuelingProtocol, IntensityDistribution, PhaseFit, Progression, WorkoutFilter, WorkoutParams,
