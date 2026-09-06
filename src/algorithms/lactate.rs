@@ -27,8 +27,10 @@
 //!
 //! Every method answers [`ThresholdOutcome::NotDeterminable`] with a reason when
 //! the protocol cannot support it — lactate that never reaches 4.0, a curve
-//! whose farthest point from the chord sits on an endpoint, segments that do
-//! not intersect — instead of substituting a rule of thumb. The analysis
+//! that never departs from its chord by as much as a meter can display,
+//! segments that do not intersect — instead of substituting a rule of thumb.
+//! Comparisons against the published thresholds carry the representation
+//! error, so a reading a meter cannot distinguish cannot change the answer. The analysis
 //! refuses fewer than four stages, more than [`MAX_STAGES`], or an intensity
 //! that does not increase from stage to stage.
 //!
@@ -77,6 +79,31 @@ pub const OBLA_MMOL: f64 = 4.0;
 /// The stage-to-stage rise that marks the first lactate increase in the
 /// modified Dmax construction (Bishop et al. 1998), in mmol/L.
 pub const MODIFIED_DMAX_RISE_MMOL: f64 = 0.4;
+
+/// The smallest departure from the chord the Dmax constructions will call a
+/// threshold, in mmol/L.
+///
+/// A portable meter displays to 0.1 mmol/L, so a curve whose greatest
+/// departure from its own chord is smaller than that is describing the
+/// least-squares fit, not the athlete. Without this floor a submaximal test
+/// that never approached LT2 still returns a "determined" threshold sitting
+/// on a departure of a few thousandths of a mmol — and it can land below
+/// LT1. Refusing is the honest answer, and matches what OBLA and modified
+/// Dmax already do when the protocol cannot support them.
+pub const DMAX_MIN_DEPARTURE_MMOL: f64 = 0.1;
+
+/// Tolerance for comparing a measured lactate rise against
+/// [`MODIFIED_DMAX_RISE_MMOL`].
+///
+/// Meters read to 0.1 mmol/L, so a rise of *exactly* 0.4 is the common case —
+/// and binary64 does not agree with itself about it: `1.6 - 1.2` is
+/// 0.400000000000000133 while `2.0 - 1.6` is 0.399999999999999911. Comparing
+/// raw would let the athlete's particular decimal pair decide where the chord
+/// starts, which moves LT2 and every power zone anchored on it. The published
+/// criterion is a rise *greater than* 0.4, and on a 0.1-resolution meter that
+/// means 0.5 or more, so the comparison is strict with the representation
+/// error taken out.
+const RISE_EPSILON_MMOL: f64 = 1e-9;
 
 /// The lactate concentrations the band table is interpolated at, in mmol/L.
 /// They span the LT1 band (1.0–2.0) and the LT2 band (2.5–4.0) reported by
@@ -472,7 +499,9 @@ impl Cubic {
             .into_iter()
             .flatten()
             .filter(|&t| t > from && t < to)
-            .filter(|&t| below_chord(t) > 0.0)
+            // A departure the meter could not have displayed is fit noise, not
+            // a threshold; see [`DMAX_MIN_DEPARTURE_MMOL`].
+            .filter(|&t| below_chord(t) >= DMAX_MIN_DEPARTURE_MMOL)
             .max_by(|&a, &b| below_chord(a).total_cmp(&below_chord(b)))
     }
 }
@@ -680,7 +709,9 @@ fn dmax(series: &EffortSeries, cubic: Cubic, from_index: usize, ts: &[f64]) -> T
     }
     cubic.farthest_below_chord(ts[from_index], ts[last]).map_or_else(
         || ThresholdOutcome::NotDeterminable {
-            reason: "the fitted curve has no interior point below the chord; lactate did not accelerate across the test".to_owned(),
+            reason: format!(
+                "the fitted curve never departs from its chord by the {DMAX_MIN_DEPARTURE_MMOL:.1} mmol/L a meter can display; lactate did not accelerate enough across the test to place this threshold"
+            ),
         },
         |t| {
             let effort = series.denormalised(t);
@@ -692,8 +723,9 @@ fn dmax(series: &EffortSeries, cubic: Cubic, from_index: usize, ts: &[f64]) -> T
 /// LT2 by Dmax with the chord starting at the stage before the first rise
 /// greater than [`MODIFIED_DMAX_RISE_MMOL`].
 fn modified_dmax(series: &EffortSeries, cubic: Cubic, ts: &[f64]) -> ThresholdOutcome {
-    let first_rise = (1..series.len())
-        .find(|&i| series.lactates[i] - series.lactates[i - 1] > MODIFIED_DMAX_RISE_MMOL);
+    let first_rise = (1..series.len()).find(|&i| {
+        series.lactates[i] - series.lactates[i - 1] - MODIFIED_DMAX_RISE_MMOL > RISE_EPSILON_MMOL
+    });
     first_rise.map_or_else(
         || ThresholdOutcome::NotDeterminable {
             reason: format!(

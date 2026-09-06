@@ -6,10 +6,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::hint::black_box;
+
 use dravr_cageux::algorithms::lactate::{
     LactateIntensityUnit, LactateStage, LactateStepTest, LactateThresholdMethod,
-    LactateThresholdPoint, LactateThresholds, ThresholdOutcome, BAND_TABLE_MMOL, MAX_STAGES,
-    MIN_STAGES, OBLA_MMOL,
+    LactateThresholdPoint, LactateThresholds, ThresholdOutcome, BAND_TABLE_MMOL,
+    DMAX_MIN_DEPARTURE_MMOL, MAX_STAGES, MIN_STAGES, OBLA_MMOL,
 };
 use dravr_cageux::error::IntelligenceError;
 
@@ -185,6 +187,84 @@ fn modified_dmax_starts_its_chord_at_the_stage_before_the_first_rise_over_point_
         "modified Dmax sits to the right of Dmax on an accelerating curve: {} vs {}",
         point.intensity,
         dmax_point.intensity
+    );
+}
+
+/// A rise of exactly 0.4 mmol/L must be treated the same way whichever pair of
+/// meter readings produced it. In binary64 it is not one value — `1.6 - 1.2`
+/// is 0.400000000000000133 and `2.0 - 1.6` is 0.399999999999999911 — so a raw
+/// `>` comparison lets the athlete's particular decimals decide where the
+/// chord starts, moving LT2 and every power zone anchored on it.
+#[test]
+fn a_rise_of_exactly_point_four_does_not_start_the_chord_whichever_decimals_produced_it() {
+    // Both series rise 0.4, 0.4, then 1.0, 1.2, 1.4. The first rise "greater
+    // than 0.4" is the 1.0 at index 3, so both chords must start at index 2
+    // (200 W) — never at index 0 or 1, which is what the raw comparison did
+    // for whichever pair happened to land above 0.4 in binary64.
+    let build = |lactates: [f64; 6]| LactateStepTest {
+        unit: LactateIntensityUnit::Watts,
+        stages: (0..6)
+            .map(|i| stage(f64::from(i as u32).mul_add(25.0, 150.0), lactates[i], None))
+            .collect(),
+    };
+    let high_lactates = [1.2, 1.6, 2.0, 3.0, 4.2, 5.6];
+    let low_lactates = [1.6, 2.0, 2.4, 3.4, 4.6, 6.0];
+
+    // The fixtures are chosen so their nominally identical 0.4 rises fall on
+    // OPPOSITE sides of a raw comparison. black_box keeps the compiler from
+    // folding that away, because the whole point is the runtime value.
+    let high_rise = black_box(high_lactates[1]) - black_box(high_lactates[0]);
+    let low_rise = black_box(low_lactates[1]) - black_box(low_lactates[0]);
+    assert!(
+        high_rise > 0.4 && low_rise < 0.4,
+        "the fixtures must straddle the raw comparison: {high_rise:?} and {low_rise:?}"
+    );
+
+    let high = build(high_lactates).analyze().unwrap();
+    let low = build(low_lactates).analyze().unwrap();
+
+    let high_lt2 = determined(&high.lt2_modified_dmax);
+    let low_lt2 = determined(&low.lt2_modified_dmax);
+    // Same stage intensities and the same rise shape, so the chord starts at
+    // the same stage and the threshold lands at the same watts.
+    approx(high_lt2.intensity, low_lt2.intensity, 1e-9);
+    assert!(
+        high_lt2.intensity > 200.0,
+        "the chord starts at the stage before the 1.0 rise, not before a 0.4 one: {}",
+        high_lt2.intensity
+    );
+}
+
+/// A submaximal test that never approached LT2 must not yield one. Before the
+/// departure floor, Dmax accepted any positive wiggle of the least-squares
+/// cubic — on this curve a departure of about 0.002 mmol/L, a fiftieth of what
+/// a meter displays — and returned it as a threshold below LT1.
+#[test]
+fn dmax_refuses_a_departure_smaller_than_a_meter_can_display() {
+    let test = LactateStepTest {
+        unit: LactateIntensityUnit::Watts,
+        stages: vec![
+            stage(100.0, 1.353, None),
+            stage(150.0, 1.658, None),
+            stage(200.0, 1.914, None),
+            stage(250.0, 2.254, None),
+            stage(300.0, 2.515, None),
+            stage(350.0, 2.759, None),
+        ],
+    };
+    let result = test.analyze().unwrap();
+    let why = reason(&result.lt2_dmax);
+    assert!(
+        why.contains("0.1"),
+        "the reason names the resolution it could not clear: {why}"
+    );
+    // The other two LT2 constructs already refused this curve; Dmax now agrees
+    // instead of inventing a threshold none of them support.
+    assert!(reason(&result.lt2_obla_4mmol).contains("2.8"));
+    assert!(reason(&result.lt2_modified_dmax).contains("0.4"));
+    assert!(
+        (DMAX_MIN_DEPARTURE_MMOL - 0.1).abs() < 1e-12,
+        "the floor is the meter's display step"
     );
 }
 
