@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0] — 2026-09-06
+
+### Added
+
+- feat(schema): SportType derives JsonSchema
+- feat(schema): FormBand derives JsonSchema too
+
+### Fixed
+
+- fix(lactate): the 0.4 rise is a decimal, not a binary64 accident
+
+
+
 ## [0.8.2] — 2026-09-06
 
 
