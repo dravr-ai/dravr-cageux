@@ -7,7 +7,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![allow(missing_docs)]
 
-//! These eleven types are returned whole to callers that serialize them
+//! These twelve types are returned whole to callers that serialize them
 //! straight onto a protocol wire — the platform's `analyze_sleep_quality`,
 //! `calculate_recovery_score` and `suggest_rest_day` MCP tools do exactly
 //! that, and MCP requires a tool declaring an `outputSchema` to answer with
@@ -25,6 +25,7 @@ use dravr_cageux::recovery_calculator::{
 use dravr_cageux::sleep_analysis::{
     HrvRecoveryStatus, HrvTrend, HrvTrendAnalysis, SleepQualityCategory, SleepQualityScore,
 };
+use dravr_cageux::training_load::FormBand;
 
 /// The property names a derived object schema declares.
 fn properties(schema: &serde_json::Value) -> Vec<String> {
@@ -170,6 +171,19 @@ fn the_enum_schemas_list_the_variants_as_they_are_serialized() {
                 "ready_for_moderate",
                 "easy_only",
                 "rest_needed",
+            ],
+        ),
+        (
+            "FormBand",
+            serde_json::to_value(schemars::schema_for!(FormBand)).unwrap(),
+            vec![
+                "insufficient_history",
+                "deep_fatigue",
+                "heavy_block",
+                "productive",
+                "balanced",
+                "fresh",
+                "detraining",
             ],
         ),
         (

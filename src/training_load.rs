@@ -368,7 +368,7 @@ impl TrainingLoadCalculator {
 /// single form vocabulary — every surface that bands form derives it from
 /// here rather than comparing raw TSB to a constant, because the same TSB is
 /// a normal build week at CTL 120 and the deepest fatigue at CTL 40.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FormBand {
     /// No chronic base to normalize against — form is not interpretable.
